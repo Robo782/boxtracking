@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: device-box-tracker
+    env: docker
+    plan: free
+    disk:
+      name: sqlite-disk
+      mountPath: /app/server
+      sizeGB: 1
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true

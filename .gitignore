@@ -1,0 +1,3 @@
+client/dist
+server/database.sqlite
+server/*.log
