@@ -1,0 +1,10 @@
+# Node / build junk
+node_modules/
+client/build/
+server/static/
+npm-debug.log*
+yarn-debug.log*
+*.sqlite
+
+# Env
+.env
