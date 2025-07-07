@@ -1,25 +1,31 @@
 // server/db.js
 // ────────────────────────────────────────────────────────────
-// SQLite-Init + Migration (läuft einmalig beim Start)
-// DB‐Datei liegt im gemounteten Ordner  /app/server/db/
+// SQLite-Initialisierung + Migration
+// DB-Datei liegt im gemounteten Ordner  /app/server/db/
 // ────────────────────────────────────────────────────────────
 const sqlite3 = require("sqlite3").verbose();
 const path    = require("path");
+const fs      = require("fs");
 
-// Datenbank-Datei im Disk-Mount-Pfad
-const dbFile = path.join(__dirname, "db", "database.sqlite");
-const db     = new sqlite3.Database(
+// Ordner anlegen (wird von Render-Disk gemountet)
+const dbDir  = path.join(__dirname, "db");
+const dbFile = path.join(dbDir, "database.sqlite");
+
+// ★ WICHTIG: stellt sicher, dass der Ordner existiert
+fs.mkdirSync(dbDir, { recursive: true });
+
+// Datenbank öffnen / erzeugen
+const db = new sqlite3.Database(
   dbFile,
   sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE
 );
 
-// ─── Migration ──────────────────────────────────────────────
+// ─── Migration (Tabellen erzeugen / erweitern) ──────────────
 db.serialize(() => {
-  /* Performance + Locks */
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA busy_timeout = 5000");
 
-  /* USERS  ─ mit username + passwordHash + role */
+  // USERS - jetzt mit username + passwordHash + role
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,10 +35,10 @@ db.serialize(() => {
     )
   `);
 
-  /* falls Spalten nachträglich fehlen → nachziehen */
+  // Füge fehlende Spalten nach, falls altes Schema vorhanden
   db.all(`PRAGMA table_info(users)`, (err, cols) => {
     if (err) return console.error(err);
-    const have = name => cols.some(c => c.name === name);
+    const have = n => cols.some(c => c.name === n);
 
     if (!have("username"))
       db.run(`ALTER TABLE users ADD COLUMN username TEXT`);
@@ -43,7 +49,7 @@ db.serialize(() => {
               CHECK(role IN ('user','admin')) NOT NULL DEFAULT 'user'`);
   });
 
-  /* BOXES */
+  // BOXES
   db.run(`
     CREATE TABLE IF NOT EXISTS boxes (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +63,7 @@ db.serialize(() => {
     )
   `);
 
-  /* BOX_HISTORY */
+  // BOX_HISTORY
   db.run(`
     CREATE TABLE IF NOT EXISTS box_history (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
