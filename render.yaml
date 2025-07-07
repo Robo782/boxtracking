@@ -1,10 +1,11 @@
+
 services:
   - type: web
     name: device-box-tracker
     env: docker
     plan: starter      # 7 €-Plan (damit Disk erlaubt)
     disk:
-      name: sqlite-disk
+      name: sqlite-disk #111
       mountPath: /app/server
       sizeGB: 1
     envVars:
