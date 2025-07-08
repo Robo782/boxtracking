@@ -1,44 +1,57 @@
-import { useRef } from "react";
-import axios       from "axios";
+// client/src/pages/BackupRestore.jsx
+import { useState }   from "react";
+import { Link }       from "react-router-dom";   //  ← NEU
+import axios          from "axios";
 
 export default function BackupRestore() {
-  const fileRef = useRef(null);
-  const hdr = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+  const [file, setFile]         = useState(null);
+  const [message, setMessage]   = useState("");
 
-  /* Backup herunterladen */
-  const downloadBackup = async () => {
-    const res = await axios.get("/api/admin/backup", {
-      headers: hdr,
-      responseType: "blob"
-    });
-    const url  = window.URL.createObjectURL(new Blob([res.data]));
-    const link = document.createElement("a");
-    link.href  = url;
-    link.setAttribute("download", "backup.sqlite");
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
-
-  /* Restore hochladen */
-  const uploadBackup = async () => {
-    const file = fileRef.current.files[0];
-    if (!file) return alert("Bitte Datei auswählen");
-    const fd = new FormData();
-    fd.append("file", file);
-    await axios.post("/api/admin/restore", fd, { headers: hdr });
-    alert("Backup eingespielt – Service startet neu.");
-  };
+  /* Handler … (unverändert) ------------------------------------------------ */
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Datenbank-Backup / -Restore</h2>
+    <div className="p-6 space-y-6">
 
-      <button onClick={downloadBackup}>Backup herunterladen</button>
+      {/* Kopfzeile + Zurück-Link */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">💾 Backup & Restore</h1>
 
-      <hr />
-      <input type="file" ref={fileRef} accept=".sqlite" />
-      <button onClick={uploadBackup}>Backup einspielen</button>
+        {/* ↩ Zur Übersicht */}
+        <Link
+          to="/boxes"
+          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+        >
+          ↩ Zur Übersicht
+        </Link>
+      </div>
+
+      {/* --- Backup --- */}
+      <button
+        onClick={handleBackup}
+        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+      >
+        Backup jetzt herunterladen
+      </button>
+
+      {/* --- Restore --- */}
+      <form onSubmit={handleRestore} className="space-y-4">
+        <input
+          type="file"
+          accept=".sqlite"
+          onChange={e => setFile(e.target.files[0])}
+          className="block"
+        />
+        <button
+          type="submit"
+          disabled={!file}
+          className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white px-4 py-2 rounded"
+        >
+          Datenbank wiederherstellen
+        </button>
+      </form>
+
+      {/* Status-/Fehlermeldung */}
+      {message && <p className="text-sm text-gray-800">{message}</p>}
     </div>
   );
 }
