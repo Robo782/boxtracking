@@ -25,6 +25,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/admin"            element={<AdminDashboard />} />   
         <Route path="/admin/boxes-manage"  element={<BoxesManage />} /> 
         <Route path="/admin/users"      element={<UserManagement />} />
+        <Route path="/admin/backup" element={<BackupRestore />} />
+
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
