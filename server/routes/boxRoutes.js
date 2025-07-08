@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/search", search.search);              // /api/boxes/search?q=
 
 /* ---------- 2. Box-Aktionen ---------- */
-router.get ("/",            ctrl.getAllBoxes);     // /api/boxes
+router.get("/",            ctrl.getBoxes);      // /api/boxes?status=&prefix=
 router.get ("/:id/history", ctrl.getHistory);      // /api/boxes/:id/history
 router.put("/:id/load",     ctrl.loadBox);         // /api/boxes/:id/load
 router.put("/:id/return",   ctrl.returnBox);       // /api/boxes/:id/return
