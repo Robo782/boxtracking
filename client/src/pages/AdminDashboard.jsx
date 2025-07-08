@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
-// … weitere Importe
+import ResetDatabaseButton from "../components/ResetDatabaseButton";
+import SeedBoxesButton    from "../components/SeedBoxesButton";
 
 export default function AdminDashboard() {
   const role = localStorage.getItem("role");
