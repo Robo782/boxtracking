@@ -10,6 +10,7 @@ import BoxHistory      from "./pages/BoxHistory";
 import UserManagement  from "./pages/UserManagement";
 import AdminDashboard  from "./pages/AdminDashboard";
 import BoxesManage     from "./pages/BoxesManage";
+import BackupRestore from "./pages/BackupRestore";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
