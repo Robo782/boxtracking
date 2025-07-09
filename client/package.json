@@ -16,6 +16,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.11",
     "@vitejs/plugin-react": "^4.1.0",
+    "daisyui": "^5.0.46",
     "i": "^0.3.7",
     "npm": "^11.4.2",
     "tailwindcss": "^4.1.11",
