@@ -1,57 +1,81 @@
 // client/src/pages/BackupRestore.jsx
-import { useState }   from "react";
-import { Link }       from "react-router-dom";   //  ← NEU
-import axios          from "axios";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import axios from "axios";
 
 export default function BackupRestore() {
-  const [file, setFile]         = useState(null);
-  const [message, setMessage]   = useState("");
+  const [file, setFile] = useState(null);
+  const [message, setMessage] = useState("");
 
-  /* Handler … (unverändert) ------------------------------------------------ */
+  /* ------------- Handler (unverändert lassen) ------------- */
+  const handleBackup = async () => {
+    /* ... */
+  };
+  const handleRestore = async (e) => {
+    /* ... */
+  };
+  /* -------------------------------------------------------- */
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-gray-50 p-6 sm:p-10">
+      {/* Kopfzeile */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
+        <h1 className="text-3xl font-semibold text-gray-800">
+          💾 Backup&nbsp;&amp;&nbsp;Restore
+        </h1>
 
-      {/* Kopfzeile + Zurück-Link */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">💾 Backup & Restore</h1>
-
-        {/* ↩ Zur Übersicht */}
         <Link
           to="/boxes"
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+          className="mt-4 sm:mt-0 inline-block bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium px-5 py-2 rounded shadow"
         >
           ↩ Zur Übersicht
         </Link>
       </div>
 
-      {/* --- Backup --- */}
-      <button
-        onClick={handleBackup}
-        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-      >
-        Backup jetzt herunterladen
-      </button>
+      {/* Aktions-Card */}
+      <div className="max-w-xl space-y-8">
+        {/* Backup */}
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col gap-4">
+          <h2 className="text-lg font-medium text-gray-700">🔄 Backup erstellen</h2>
+          <button
+            onClick={handleBackup}
+            className="self-start bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded"
+          >
+            Backup herunterladen
+          </button>
+        </div>
 
-      {/* --- Restore --- */}
-      <form onSubmit={handleRestore} className="space-y-4">
-        <input
-          type="file"
-          accept=".sqlite"
-          onChange={e => setFile(e.target.files[0])}
-          className="block"
-        />
-        <button
-          type="submit"
-          disabled={!file}
-          className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white px-4 py-2 rounded"
-        >
-          Datenbank wiederherstellen
-        </button>
-      </form>
+        {/* Restore */}
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col gap-4">
+          <h2 className="text-lg font-medium text-gray-700">♻️ Backup einspielen</h2>
 
-      {/* Status-/Fehlermeldung */}
-      {message && <p className="text-sm text-gray-800">{message}</p>}
+          <form onSubmit={handleRestore} className="flex flex-col gap-4">
+            <input
+              type="file"
+              accept=".sqlite"
+              onChange={(e) => setFile(e.target.files[0])}
+              className="file:mr-4 file:py-2 file:px-4
+                         file:rounded file:border-0
+                         file:text-sm file:font-semibold
+                         file:bg-blue-50 file:text-blue-700
+                         hover:file:bg-blue-100"
+            />
+
+            <button
+              type="submit"
+              disabled={!file}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-40
+                         text-white text-sm font-medium px-4 py-2 rounded self-start"
+            >
+              Datenbank wiederherstellen
+            </button>
+          </form>
+
+          {message && (
+            <p className="text-sm text-gray-600 border-t pt-4">{message}</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

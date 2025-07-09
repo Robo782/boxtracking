@@ -3,97 +3,89 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
+/* ────────────────────────────────────────────── */
+/* Hilfs-Funktionen zum Status-Mapping            */
+const toFields = (v) => ({
+  verfügbar: { departed: 0, returned: 0, is_checked: 0 },
+  unterwegs : { departed: 1, returned: 0, is_checked: 0 },
+  zurück    : { departed: 1, returned: 1, is_checked: 0 },
+  geprüft   : { departed: 1, returned: 1, is_checked: 1 }
+}[v]);
+
+const current = (b) => !b.departed ? "verfügbar"
+  : b.departed && !b.returned ? "unterwegs"
+  : b.returned && !b.is_checked ? "zurück"
+  : "geprüft";
+/* ────────────────────────────────────────────── */
+
 export default function BoxesManage() {
-  /* ────────── Zugriff & Header ────────── */
   const role = localStorage.getItem("role");
   const nav  = useNavigate();
   const cfg  = { headers: { Authorization:`Bearer ${localStorage.getItem("token")}` } };
 
-  /* ────────── State ────────── */
   const [boxes, setBoxes] = useState([]);
   const [err,   setErr  ] = useState("");
 
-  /* ────────── Laden ────────── */
+  /* Boxen laden + Zugriffsschutz */
   useEffect(() => {
-    /* 1. Nicht-Admin? → zurück zur Übersicht */
-    if (role !== "admin") {
-      nav("/boxes");
-      return;
-    }
+    if (role !== "admin") { nav("/boxes"); return; }
 
-    /* 2. Boxen vom Server holen (kein async direkt im useEffect) */
-    const fetchData = async () => {
+    (async () => {
       try {
         const { data } = await axios.get("/api/boxes", cfg);
         setBoxes(data);
-      } catch (e) {
+      } catch {
         setErr("⚠️ Boxen konnten nicht geladen werden");
       }
-    };
-    fetchData();
-  }, [role, nav]);           // runs exactly once when component mounts
+    })();
+  }, [role, nav]);
 
-  /* ────────── Mapping Dropdown ↔ Felder ────────── */
-  const toFields = (v) => ({
-    verfügbar: { departed:0, returned:0, is_checked:0 },
-    unterwegs : { departed:1, returned:0, is_checked:0 },
-    zurück    : { departed:1, returned:1, is_checked:0 },
-    geprüft   : { departed:1, returned:1, is_checked:1 }
-  }[v]);
-
-  const current = (b) => !b.departed ? "verfügbar"
-                     : b.departed && !b.returned ? "unterwegs"
-                     : b.returned && !b.is_checked ? "zurück"
-                     : "geprüft";
-
-  /* ────────── Speichern ────────── */
-  const save = async (id, patch) => {
+  /* Patch-Aufruf */
+  const save = async (id, payload) => {
     try {
-      await axios.patch(`/api/admin/boxes/${id}`, patch, cfg);
-      setBoxes(prev => prev.map(b => (b.id === id ? { ...b, ...patch } : b)));
-    } catch {
-      setErr("⚠️ Fehler beim Speichern");
-    }
+      await axios.patch(`/api/admin/boxes/${id}`, payload, cfg);
+      setBoxes(prev => prev.map(b => (b.id === id ? { ...b, ...payload } : b)));
+    } catch { setErr("⚠️ Fehler beim Speichern"); }
   };
 
   return (
-    <div style={{ padding:20 }}>
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Kopfzeile */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <h1>🛠 Box-Verwaltung</h1>
-        <Link to="/boxes"><button>⇦ Zur Übersicht</button></Link>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">🛠 Box-Verwaltung</h1>
+        <Link
+          to="/boxes"
+          className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded"
+        >
+          ↩ Zur Übersicht
+        </Link>
       </div>
 
-      {err && <p style={{ color:"red" }}>{err}</p>}
+      {err && <p className="text-red-600 mb-4">{err}</p>}
 
-      <table border="1" cellPadding="6" style={{ width:"100%", borderCollapse:"collapse", marginTop:20 }}>
-        <thead style={{ background:"#f0f0f0" }}>
-          <tr>
-            <th>Serial</th><th>Cycles</th><th>Device</th>
-            <th>Status</th><th>Prüfer</th><th>💾</th>
-          </tr>
-        </thead>
-        <tbody>
-          {boxes.map(b=>(
-            <Row
-              key={b.id}
-              box={b}
-              current={current(b)}
-              toFields={toFields}
-              onSave={save}
-            />
-          ))}
-          {boxes.length === 0 && (
-            <tr><td colSpan={6} style={{ textAlign:"center" }}>Keine Boxen vorhanden</td></tr>
-          )}
-        </tbody>
-      </table>
+      {/* Grid mit Karten */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {boxes.map(b => (
+          <BoxCard
+            key={b.id}
+            box={b}
+            current={current(b)}
+            onSave={save}
+          />
+        ))}
+        {boxes.length === 0 && (
+          <p className="col-span-full text-center text-gray-600">
+            Keine Boxen vorhanden
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
-/* ────────── Zeilen-Komponente ────────── */
-function Row({ box, current, toFields, onSave }) {
+/* ────────────────────────────────────────────── */
+/* Einzel-Karte mit Edit-Funktion                */
+function BoxCard({ box, current, onSave }) {
   const [f, setF] = useState({
     serial       : box.serial,
     cycles       : box.cycles,
@@ -101,35 +93,78 @@ function Row({ box, current, toFields, onSave }) {
     status       : current,
     checked_by   : box.checked_by ?? ""
   });
-
-  const h = (k,v) => setF({ ...f, [k]:v });
+  const change = (k,v) => setF({ ...f, [k]: v });
 
   const patch = () => {
-    const payload = {
+    onSave(box.id, {
       serial       : f.serial,
       cycles       : +f.cycles,
       device_serial: f.device_serial,
       checked_by   : f.checked_by,
       ...toFields(f.status)
-    };
-    onSave(box.id, payload);
+    });
   };
 
   return (
-    <tr>
-      <td><input value={f.serial}        onChange={e=>h("serial", e.target.value)} /></td>
-      <td><input value={f.cycles}        onChange={e=>h("cycles", e.target.value)} style={{ width:60 }} /></td>
-      <td><input value={f.device_serial} onChange={e=>h("device_serial", e.target.value)} /></td>
-      <td>
-        <select value={f.status} onChange={e=>h("status", e.target.value)}>
-          <option>verfügbar</option>
-          <option>unterwegs</option>
-          <option>zurück</option>
-          <option>geprüft</option>
-        </select>
-      </td>
-      <td><input value={f.checked_by} onChange={e=>h("checked_by", e.target.value)} style={{ width:80 }} /></td>
-      <td><button onClick={patch}>💾</button></td>
-    </tr>
+    <div className="border rounded shadow-sm p-4 space-y-4 bg-white">
+      {/* Kopfbereich */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">{f.serial}</h2>
+        <button
+          onClick={patch}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
+          title="Speichern"
+        >
+          💾
+        </button>
+      </div>
+
+      {/* Felder */}
+      <div className="space-y-3">
+        {/* Serial + Cycles */}
+        <div className="flex gap-2">
+          <input
+            value={f.serial}
+            onChange={e=>change("serial", e.target.value)}
+            className="flex-1 border rounded px-2 py-1"
+          />
+          <input
+            value={f.cycles}
+            onChange={e=>change("cycles", e.target.value)}
+            className="w-20 border rounded px-2 py-1 text-center"
+            type="number"
+          />
+        </div>
+
+        {/* Device-Serial */}
+        <input
+          value={f.device_serial}
+          onChange={e=>change("device_serial", e.target.value)}
+          className="w-full border rounded px-2 py-1"
+          placeholder="Device-Serial"
+        />
+
+        {/* Status + Prüfer */}
+        <div className="flex gap-2">
+          <select
+            value={f.status}
+            onChange={e=>change("status", e.target.value)}
+            className="flex-1 border rounded px-2 py-1"
+          >
+            <option>verfügbar</option>
+            <option>unterwegs</option>
+            <option>zurück</option>
+            <option>geprüft</option>
+          </select>
+
+          <input
+            value={f.checked_by}
+            onChange={e=>change("checked_by", e.target.value)}
+            className="w-32 border rounded px-2 py-1"
+            placeholder="Prüfer"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
