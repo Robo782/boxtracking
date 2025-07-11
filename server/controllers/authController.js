@@ -1,39 +1,63 @@
 // server/controllers/authController.js
-const db = require("../db");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+const db        = require("../db");
+const bcrypt    = require("bcrypt");
+const jwt       = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
-// Login-Funktion
+/**
+ * POST /api/auth/login
+ * erwartet: { username: "...", password: "..." }
+ * - oder alternativ: { email: "...", password: "..." }
+ */
 exports.login = (req, res) => {
-  const { email, password } = req.body;
+  try {
+    let { username, email, password } = req.body;
 
-  // Deine Datenbank hat das Feld "username", nicht "email"
-  db.get(`SELECT * FROM users WHERE username = ?`, [email], async (err, user) => {
-    if (err) {
-      console.error("❌ DB-Fehler:", err.message);
-      return res.status(500).json({ error: "Interner Serverfehler" });
+    // Grundvalidierung ─────────────────────────────────────────────
+    if (!password || (!username && !email)) {
+      return res.status(400).json({ error: "username / email und Passwort erforderlich" });
     }
 
-    if (!user) {
-      console.log("❌ Benutzer nicht gefunden");
-      return res.status(401).json({ error: "Ungültige Zugangsdaten" });
-    }
+    // einheitliche Schreibweise → lowercase & trim
+    const loginId = (username || email).trim().toLowerCase();
 
-    const match = await bcrypt.compare(password, user.passwordHash);
-    if (!match) {
-      console.log("❌ Passwort falsch");
-      return res.status(401).json({ error: "Ungültige Zugangsdaten" });
-    }
+    // User suchen (Case-insensitive)
+    db.get(
+      `SELECT * FROM users WHERE LOWER(username) = ?`,
+      [loginId],
+      async (err, user) => {
+        if (err) {
+          console.error("❌ DB-Fehler:", err.message);
+          return res.status(500).json({ error: "Interner Serverfehler" });
+        }
 
-    // JWT generieren mit username & role
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: "8h" }
+        if (!user) {
+          return res.status(401).json({ error: "Ungültige Zugangsdaten" });
+        }
+
+        // Passwort prüfen
+        const match = await bcrypt.compare(password, user.passwordHash);
+        if (!match) {
+          return res.status(401).json({ error: "Ungültige Zugangsdaten" });
+        }
+
+        // JWT generieren
+        const token = jwt.sign(
+          {
+            id:       user.id,
+            username: user.username,
+            role:     user.role,
+          },
+          JWT_SECRET,
+          { expiresIn: "8h" }
+        );
+
+        return res.json({ token });
+      }
     );
-
-    res.json({ token });
-  });
+  } catch (e) {
+    console.error("❌ Unerwarteter Fehler:", e);
+    return res.status(500).json({ error: "Interner Serverfehler" });
+  }
 };
