@@ -1,63 +1,84 @@
 // client/src/pages/Login.jsx
-import { useState } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useState }           from "react";
+import { useNavigate }        from "react-router-dom";
 
+/**
+ * Einfaches Login-Formular
+ *  ‣ POST /api/auth/login  { username, password }
+ *  ‣ erwartet  { token, role }   role = 'admin' | 'user'
+ *  ‣ speichert token & role in localStorage
+ *  ‣ routed anschließend zu  /admin   oder  /boxes
+ */
 export default function Login() {
-  const [username, setUsername]   = useState("");
-  const [password, setPassword]   = useState("");
-  const [err,      setErr]        = useState("");
   const nav = useNavigate();
 
-  const login = async () => {
-    setErr("");
+  const [username, setUser]     = useState("");
+  const [password, setPass]     = useState("");
+  const [loading,  setLoading]  = useState(false);
+  const [error,   setError]     = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
     try {
-      const { data } = await axios.post("/api/auth/login", {
-        email: username,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ username, password })
       });
-      const { token } = data;
-      const payload   = JSON.parse(atob(token.split(".")[1]));
+
+      if (!res.ok) throw new Error("Ungültiger Benutzer / Passwort");
+      const { token, role } = await res.json();
+
       localStorage.setItem("token", token);
-      localStorage.setItem("role",  payload.role);
-      nav("/boxes");
-    } catch {
-      setErr("❌ Login fehlgeschlagen");
+      localStorage.setItem("role",  role);
+
+      nav(role === "admin" ? "/admin" : "/boxes", { replace:true });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  };
-  const onKey = (e) => e.key === "Enter" && login();
+  }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-base-200 px-4">
-      <div className="card w-full max-w-sm shadow-lg bg-base-100">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-base-100">
+      <div className="card w-full max-w-sm shadow-xl bg-base-200">
         <div className="card-body">
-          <h1 className="card-title text-2xl justify-center">Device Box Tracker</h1>
+          <h2 className="card-title justify-center">Login</h2>
 
-          <input
-            type="text"
-            placeholder="E-Mail / Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyDown={onKey}
-            autoFocus
-            className="input input-bordered w-full"
-          />
-          <input
-            type="password"
-            placeholder="Passwort"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={onKey}
-            className="input input-bordered w-full"
-          />
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <input
+              type="text"
+              placeholder="Username"
+              autoFocus
+              className="input input-bordered w-full"
+              value={username}
+              onChange={e=>setUser(e.target.value)}
+              required
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="input input-bordered w-full"
+              value={password}
+              onChange={e=>setPass(e.target.value)}
+              required
+            />
 
-          {err && <div className="text-error text-sm">{err}</div>}
+            {error && <p className="text-error text-sm">{error}</p>}
 
-          <button onClick={login} className="btn btn-primary w-full mt-2">
-            Einloggen
-          </button>
+            <button
+              type="submit"
+              className={`btn btn-primary w-full ${loading && "btn-disabled"}`}
+            >
+              {loading ? "…login" : "Login"}
+            </button>
+          </form>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
