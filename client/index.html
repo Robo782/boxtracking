@@ -1,17 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
     <title>Device Box Tracker</title>
 
-    <!-- Tailwind CSS 3.x direkt vom CDN -->
-    <script src="https://cdn.tailwindcss.com/3.4.4"></script>
+    <!--  DaisyUI + Tailwind v4 CDN  -->
+    <script src="https://cdn.tailwindcss.com/3.4.4?plugins=typography"></script>
+    <script>
+      tailwind.config = { plugins: [daisyui], daisyui: { theme: "light" } };
+    </script>
   </head>
 
-  <body class="bg-gray-50 text-gray-900">
+  <body class="bg-base-200 min-h-screen">
     <div id="root"></div>
 
-    <!-- dein React-Entry -->
+    <!-- React-Entry -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

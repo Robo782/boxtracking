@@ -6,7 +6,7 @@ const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
 const bcrypt  = require("bcrypt");
-const db      = require("./db");           // ruft Migration automatisch auf
+const db      = require("./db");          // ruft Migration automatisch auf
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -20,20 +20,19 @@ app.use("/api/auth",  require("./routes/authRoutes"));
 app.use("/api/boxes", require("./routes/boxRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 
-/* ───────── React-Static ausliefern ──── */
-const staticDir = path.join(__dirname, "static");  // wird im Dockerfile gefüllt
+/* ───────── React-Build ausliefern ───── */
+const staticDir = path.join(__dirname, "static");   // <── NEU: liegt neben server.js
 app.use(express.static(staticDir));
 
-/* Single-Page-Fallback für React-Router */
+/* SPA-Fallback für React-Router */
 app.get("*", (_req, res) =>
   res.sendFile(path.join(staticDir, "index.html"))
 );
 
-/* ───────── Serverstart + Admin-Seed ── */
+/* ───────── Serverstart + Admin-Seed ─── */
 app.listen(PORT, () => {
   console.log(`[INFO] Backend running on ${PORT}`);
 
-  // einmalig Admin-User anlegen, falls DB leer
   db.get(
     "SELECT 1 FROM users WHERE username = 'admin'",
     async (err, row) => {
@@ -45,7 +44,9 @@ app.listen(PORT, () => {
            VALUES ('admin', ?, 'admin')`,
           [hash]
         );
-        console.log("[INFO] Seeded admin user (user: admin / pass: admin123)");
+        console.log(
+          "[INFO] Seeded admin user (user: admin / pass: admin123)"
+        );
       }
     }
   );

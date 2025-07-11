@@ -3,54 +3,54 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
-/* ────────── Helper ────────── */
-const statusInfo = (b) =>
-  !b.departed
-    ? { txt: "Verfügbar",   clr: "success" }
-    : b.returned
-      ? b.is_checked
-        ? { txt: "Geprüft",  clr: "info" }
-        : { txt: "Rücklauf", clr: "warning" }
-      : { txt: "Unterwegs",  clr: "accent" };
+/* ────────── Hilfs-Maps ────────── */
+const statusInfo = (b) => {
+  if (!b.departed)                 return { txt: "Verfügbar", clr: "success" };
+  if (b.departed && !b.returned)   return { txt: "Unterwegs", clr: "accent"  };
+  if (b.returned && !b.is_checked) return { txt: "Rücklauf offen", clr: "warning" };
+  return { txt: "Geprüft", clr: "info" };
+};
 
-const actionLabel = (b) =>
-  !b.departed
-    ? "Kiste auslagern"
-    : b.departed && !b.returned
-      ? "Kiste zurücknehmen"
-      : b.returned && !b.is_checked
-        ? "Überprüfung"
-        : "Kiste auslagern";
+/* UI-Label + Server-Enum */
+const STATUS_OPTIONS = [
+  { ui: "Alle Status",     q: "" },
+  { ui: "Verfügbar",       q: "available" },
+  { ui: "Unterwegs",       q: "departed" },
+  { ui: "Rücklauf offen",  q: "returned" },
+  { ui: "Geprüft",         q: "checked" },
+];
 
-/* ─────────────────────────── */
+const PREFIX_OPTIONS = [
+  { ui: "Alle Typen", q: ""     },
+  { ui: "PU-M-xx",    q: "PU-M" },
+  { ui: "PU-S-xx",    q: "PU-S" },
+  { ui: "PR-M-xx",    q: "PR-M" },
+  { ui: "PR-SB-xx",   q: "PR-SB"},
+];
+
 export default function Boxes() {
-  const [boxes,  setBoxes]  = useState([]);
-  const [query,  setQuery]  = useState("");
-  const [result, setResult] = useState([]);
+  const [boxes,  setBoxes ]  = useState([]);
+  const [query,  setQuery ]  = useState("");
+  const [result, setResult]  = useState([]);
+  const [status, setStatus]  = useState("");
+  const [prefix, setPrefix]  = useState("");
 
-  /* Filter-State */
-  const [statusFilter,  setStatusFilter]  = useState("");
-  const [prefixFilter,  setPrefixFilter]  = useState("");
-
-  /* Auth-Header */
+  const hdr = { Authorization: `Bearer ${localStorage.getItem("token")}` };
   const role = localStorage.getItem("role");
-  const hdr  = { Authorization: `Bearer ${localStorage.getItem("token")}` };
 
-  /* -------- Boxen holen -------- */
+  /* ------------ Daten holen ------------- */
   const fetchBoxes = () =>
     axios
       .get("/api/boxes", {
         headers: hdr,
-        params : { status: statusFilter, prefix: prefixFilter },
+        params : { status, prefix },
       })
       .then((r) => setBoxes(r.data))
       .catch(console.error);
 
-  useEffect(() => {
-    fetchBoxes();
-  }, [statusFilter, prefixFilter]);
+  useEffect(fetchBoxes, [status, prefix]);
 
-  /* ---------- Suche ---------- */
+  /* ------------ Suche ------------ */
   const runSearch = async (e) => {
     e?.preventDefault();
     const q = query.trim();
@@ -66,65 +66,63 @@ export default function Boxes() {
     }
   };
 
-  /* ---------- DB-Reset (Admin) ---------- */
-  const resetDb = async () => {
-    if (!window.confirm("Datenbank wirklich zurücksetzen?")) return;
-    await axios.post("/api/admin/reset", null, { headers: hdr });
-    fetchBoxes();
-  };
-
-  /* ---------------- UI ---------------- */
-  const list = result.length ? result : boxes;
+  /* ------------ UI ------------ */
+  const shown = result.length ? result : boxes;
 
   return (
-    <section className="max-w-6xl mx-auto p-4 space-y-4">
-      {/* Kopf */}
-      <header className="flex items-center justify-between">
+    <div className="p-4 flex flex-col gap-4 max-w-7xl mx-auto">
+      {/* Kopfzeile */}
+      <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           📦 Übersicht
         </h1>
         {role === "admin" && (
-          <button onClick={resetDb} className="btn btn-sm btn-error">
-            DB Reset
+          <button
+            onClick={() =>
+              window.confirm("Datenbank wirklich zurücksetzen?") &&
+              axios.post("/api/admin/reset", null, { headers: hdr }).then(fetchBoxes)
+            }
+            className="btn btn-xs btn-error"
+          >
+            DB&nbsp;Reset
           </button>
         )}
-      </header>
+      </div>
 
-      {/* Filter + Suche */}
+      {/* Filterleiste */}
       <form
         onSubmit={runSearch}
-        className="flex flex-wrap gap-2 items-end bg-base-100 p-3 rounded shadow"
+        className="flex flex-wrap items-center gap-2"
       >
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
           className="select select-bordered"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
         >
-          <option value="">Alle Status</option>
-          <option value="verfügbar">Verfügbar</option>
-          <option value="unterwegs">Unterwegs</option>
-          <option value="zurück">Rücklauf offen</option>
-          <option value="geprüft">Geprüft</option>
+          {STATUS_OPTIONS.map((o) => (
+            <option key={o.q} value={o.q}>
+              {o.ui}
+            </option>
+          ))}
         </select>
 
         <select
-          value={prefixFilter}
-          onChange={(e) => setPrefixFilter(e.target.value)}
           className="select select-bordered"
+          value={prefix}
+          onChange={(e) => setPrefix(e.target.value)}
         >
-          <option value="">Alle Typen</option>
-          <option value="PU-M">PU-M-xx</option>
-          <option value="PU-S">PU-S-xx</option>
-          <option value="PR-M">PR-M-xx</option>
-          <option value="PR-SB">PR-SB-xx</option>
+          {PREFIX_OPTIONS.map((o) => (
+            <option key={o.q} value={o.q}>
+              {o.ui}
+            </option>
+          ))}
         </select>
 
         <input
-          type="text"
+          className="input input-bordered flex-1 min-w-[200px]"
           placeholder="PCC-ID / Device-Serial"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="input input-bordered flex-1 min-w-[200px]"
         />
         <button className="btn btn-primary">Search</button>
         {result.length > 0 && (
@@ -138,57 +136,54 @@ export default function Boxes() {
         )}
       </form>
 
-      {/* Grid mit Karten */}
-      {list.length === 0 ? (
-        <div className="alert alert-info mt-4">Keine Boxen gefunden.</div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {list.map((b) => {
-            const st = statusInfo(b);
-            return (
-              <article
-                key={b.id}
-                className="card bg-base-100 border border-base-300 shadow"
-              >
-                <div className="card-body p-4">
-                  <h2 className="card-title text-sm">{b.serial}</h2>
+      {/* Box-Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {shown.map((b) => {
+          const st = statusInfo(b);
+          const action = !b.departed
+            ? { label: "Kiste auslagern", api: "load" }
+            : b.departed && !b.returned
+            ? { label: "Kiste zurücknehmen", api: "return" }
+            : b.returned && !b.is_checked
+            ? { label: "Überprüfung", api: "check" }
+            : { label: "Kiste auslagern", api: "load" };
 
-                  <ul className="text-xs leading-6">
-                    <li>
-                      <span className="font-medium">Status:</span>{" "}
-                      <span className={`badge badge-${st.clr} badge-sm`}>
-                        {st.txt}
-                      </span>
-                    </li>
-                    <li>
-                      <span className="font-medium">Cycles:</span> {b.cycles}
-                    </li>
-                    <li>
-                      <span className="font-medium">Device:</span>{" "}
-                      {b.device_serial || "—"}
-                    </li>
-                  </ul>
+          const doAction = () =>
+            axios
+              .put(`/api/boxes/${b.id}/${action.api}`, null, { headers: hdr })
+              .then(fetchBoxes);
 
-                  <div className="card-actions justify-end mt-2">
-                    <Link
-                      to={`/boxes/${b.id}`}
-                      className="btn btn-xs btn-outline btn-info"
-                    >
-                      {actionLabel(b)}
-                    </Link>
-                    <Link
-                      to={`/boxes/${b.id}/history`}
-                      className="btn btn-xs btn-link"
-                    >
-                      History
-                    </Link>
-                  </div>
+          return (
+            <div
+              key={b.id}
+              className="card bg-base-100 shadow-md border border-base-200"
+            >
+              <div className="card-body p-4">
+                <h2 className="card-title">{b.serial}</h2>
+                <ul className="text-sm leading-6">
+                  <li>
+                    <span className={`badge badge-${st.clr}`}>{st.txt}</span>
+                  </li>
+                  <li>Cycles: {b.cycles}</li>
+                  <li>Device: {b.device_serial || "—"}</li>
+                </ul>
+
+                <div className="mt-4 flex gap-2">
+                  <button onClick={doAction} className="btn btn-sm btn-primary">
+                    {action.label}
+                  </button>
+                  <Link
+                    className="btn btn-sm btn-outline"
+                    to={`/boxes/${b.id}/history`}
+                  >
+                    History
+                  </Link>
                 </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
