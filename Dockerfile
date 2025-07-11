@@ -27,7 +27,7 @@ RUN npm ci
 COPY server/. .
 
 # ---------- Vite-Build ins Backend kopieren ----------
-COPY --from=client-build /app/client/dist ./static
++ COPY --from=client-build /app/dist ./static
 
 # ---------- Start ----------
 CMD ["node", "server.js"]
