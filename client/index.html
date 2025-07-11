@@ -4,8 +4,14 @@
     <meta charset="utf-8" />
     <title>Device Box Tracker</title>
 
-    <!-- Tailwind + DaisyUI direkt über CDN (kein fehlerhaftes Inline-Script mehr) -->
-    <script src="https://cdn.tailwindcss.com/3.4.4?plugins=typography,daisyui"></script>
+    <!-- 1) Tailwind + typography-Plugin (funktioniert mit CDN) -->
+    <script src="https://cdn.tailwindcss.com/3.4.4?plugins=typography"></script>
+
+    <!-- 2) DaisyUI als fertig kompilierte CSS-Datei nachladen -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/daisyui@4.4.2/dist/full.css"
+    />
   </head>
 
   <body class="bg-base-200 min-h-screen">
