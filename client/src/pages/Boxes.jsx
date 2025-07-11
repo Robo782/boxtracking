@@ -1,188 +1,100 @@
 // client/src/pages/Boxes.jsx
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import axios from "axios";
+import { useEffect, useState, useMemo } from "react";
+import { Link }                         from "react-router-dom";
+import FilterBar                        from "../components/FilterBar";
 
-/* ────────── Hilfs-Maps ────────── */
-const statusInfo = (b) => {
-  if (!b.departed)                 return { txt: "Verfügbar", clr: "success" };
-  if (b.departed && !b.returned)   return { txt: "Unterwegs", clr: "accent"  };
-  if (b.returned && !b.is_checked) return { txt: "Rücklauf offen", clr: "warning" };
-  return { txt: "Geprüft", clr: "info" };
-};
-
-/* UI-Label + Server-Enum */
-const STATUS_OPTIONS = [
-  { ui: "Alle Status",     q: "" },
-  { ui: "Verfügbar",       q: "available" },
-  { ui: "Unterwegs",       q: "departed" },
-  { ui: "Rücklauf offen",  q: "returned" },
-  { ui: "Geprüft",         q: "checked" },
-];
-
-const PREFIX_OPTIONS = [
-  { ui: "Alle Typen", q: ""     },
-  { ui: "PU-M-xx",    q: "PU-M" },
-  { ui: "PU-S-xx",    q: "PU-S" },
-  { ui: "PR-M-xx",    q: "PR-M" },
-  { ui: "PR-SB-xx",   q: "PR-SB"},
-];
+/* Helper – Token & Role aus localStorage holen */
+const token = localStorage.getItem("token");
+const role  = localStorage.getItem("role");          // 'admin' | 'user' | null
 
 export default function Boxes() {
-  const [boxes,  setBoxes ]  = useState([]);
-  const [query,  setQuery ]  = useState("");
-  const [result, setResult]  = useState([]);
-  const [status, setStatus]  = useState("");
-  const [prefix, setPrefix]  = useState("");
+  const [boxes,  setBoxes]   = useState([]);
+  const [query,  setQuery]   = useState("");         // Textsuche
+  const [stat,   setStat]    = useState("all");      // Status-Filter
+  const [type,   setType]    = useState("all");      // Typ-Filter
+  const [error,  setError]   = useState("");
 
-  const hdr = { Authorization: `Bearer ${localStorage.getItem("token")}` };
-  const role = localStorage.getItem("role");
+  /* ---------- Daten holen ---------- */
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/boxes", {
+          headers:{ Authorization:`Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Kisten konnten nicht geladen werden");
+        setBoxes(await res.json());
+      } catch (err) { setError(err.message); }
+    })();
+  }, []);
 
-  /* ------------ Daten holen ------------- */
-  const fetchBoxes = () =>
-    axios
-      .get("/api/boxes", {
-        headers: hdr,
-        params : { status, prefix },
-      })
-      .then((r) => setBoxes(r.data))
-      .catch(console.error);
+  /* ---------- Filterlogik ---------- */
+  const list = useMemo(() => {
+    return boxes.filter(b => {
+      const matchStatus = stat === "all"  || b.status === stat;
+      const matchType   = type === "all"  || b.type   === type;
+      const matchQuery  = query === "" ||
+                          b.serial.toLowerCase().includes(query) ||
+                          (b.deviceSerial ?? "").toLowerCase().includes(query);
+      return matchStatus && matchType && matchQuery;
+    });
+  }, [boxes, stat, type, query]);
 
-  useEffect(fetchBoxes, [status, prefix]);
-
-  /* ------------ Suche ------------ */
-  const runSearch = async (e) => {
-    e?.preventDefault();
-    const q = query.trim();
-    if (!q) return setResult([]);
-    try {
-      const { data } = await axios.get("/api/boxes/search", {
-        params: { q },
-        headers: hdr,
-      });
-      setResult(data);
-    } catch (err) {
-      alert(err.response?.data?.error || "Suche fehlgeschlagen");
-    }
-  };
-
-  /* ------------ UI ------------ */
-  const shown = result.length ? result : boxes;
-
+  /* ---------- Rendering ---------- */
   return (
-    <div className="p-4 flex flex-col gap-4 max-w-7xl mx-auto">
-      {/* Kopfzeile */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          📦 Übersicht
-        </h1>
-        {role === "admin" && (
-          <button
-            onClick={() =>
-              window.confirm("Datenbank wirklich zurücksetzen?") &&
-              axios.post("/api/admin/reset", null, { headers: hdr }).then(fetchBoxes)
-            }
-            className="btn btn-xs btn-error"
-          >
-            DB&nbsp;Reset
-          </button>
-        )}
-      </div>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        📦 Übersicht
+        <span className="text-sm font-normal badge badge-outline">
+          {list.length}/{boxes.length}
+        </span>
+      </h1>
 
-      {/* Filterleiste */}
-      <form
-        onSubmit={runSearch}
-        className="flex flex-wrap items-center gap-2"
-      >
-        <select
-          className="select select-bordered"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.q} value={o.q}>
-              {o.ui}
-            </option>
-          ))}
-        </select>
+      <FilterBar
+        status={stat} setStatus={setStat}
+        type={type}   setType={setType}
+        query={query} setQuery={setQuery}
+      />
 
-        <select
-          className="select select-bordered"
-          value={prefix}
-          onChange={(e) => setPrefix(e.target.value)}
-        >
-          {PREFIX_OPTIONS.map((o) => (
-            <option key={o.q} value={o.q}>
-              {o.ui}
-            </option>
-          ))}
-        </select>
+      {error && <p className="text-error my-4">{error}</p>}
 
-        <input
-          className="input input-bordered flex-1 min-w-[200px]"
-          placeholder="PCC-ID / Device-Serial"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <button className="btn btn-primary">Search</button>
-        {result.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setResult([])}
-            className="btn btn-ghost"
-          >
-            Clear
-          </button>
-        )}
-      </form>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+        {list.map(box => (
+          <div key={box.id} className="card bg-base-200 shadow">
+            <div className="card-body p-4">
+              <h3 className="card-title text-lg">
+                {box.serial}{" "}
+                <span className="badge badge-outline">{box.type}</span>
+              </h3>
 
-      {/* Box-Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {shown.map((b) => {
-          const st = statusInfo(b);
-          const action = !b.departed
-            ? { label: "Kiste auslagern", api: "load" }
-            : b.departed && !b.returned
-            ? { label: "Kiste zurücknehmen", api: "return" }
-            : b.returned && !b.is_checked
-            ? { label: "Überprüfung", api: "check" }
-            : { label: "Kiste auslagern", api: "load" };
+              <ul className="text-sm leading-6">
+                <li>Status: <b>{box.status}</b></li>
+                <li>Cycles: {box.cycles}</li>
+                <li>Device: {box.deviceSerial || "—"}</li>
+              </ul>
 
-          const doAction = () =>
-            axios
-              .put(`/api/boxes/${b.id}/${action.api}`, null, { headers: hdr })
-              .then(fetchBoxes);
+              <div className="card-actions justify-end mt-2">
+                <Link to={`/boxes/${box.id}`} className="btn btn-sm btn-primary">
+                  🔍 Details
+                </Link>
 
-          return (
-            <div
-              key={b.id}
-              className="card bg-base-100 shadow-md border border-base-200"
-            >
-              <div className="card-body p-4">
-                <h2 className="card-title">{b.serial}</h2>
-                <ul className="text-sm leading-6">
-                  <li>
-                    <span className={`badge badge-${st.clr}`}>{st.txt}</span>
-                  </li>
-                  <li>Cycles: {b.cycles}</li>
-                  <li>Device: {b.device_serial || "—"}</li>
-                </ul>
-
-                <div className="mt-4 flex gap-2">
-                  <button onClick={doAction} className="btn btn-sm btn-primary">
-                    {action.label}
-                  </button>
+                {role === "admin" && (
                   <Link
-                    className="btn btn-sm btn-outline"
-                    to={`/boxes/${b.id}/history`}
+                    to={`/admin/boxes/${box.id}`}
+                    className="btn btn-sm btn-secondary"
                   >
-                    History
+                    🛠 Manage
                   </Link>
-                </div>
+                )}
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
+
+        {list.length === 0 && !error && (
+          <p className="col-span-full text-center opacity-60 mt-10">
+            Keine Kisten gefunden 🤷‍♂️
+          </p>
+        )}
       </div>
     </div>
   );

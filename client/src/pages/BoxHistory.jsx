@@ -1,63 +1,92 @@
 // client/src/pages/BoxHistory.jsx
 import { useEffect, useState } from "react";
-import axios from "axios";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, Link }     from "react-router-dom";
+
+const token = localStorage.getItem("token");
 
 export default function BoxHistory() {
-  const { id }   = useParams();
-  const navigate = useNavigate();
-  const [hist, setHist] = useState([]);
+  const { id }        = useParams();
+  const [rows, setRows] = useState(null);
+  const [box,  setBox ] = useState(null);
+  const [err,  setErr ] = useState("");
 
-  const hdr = { Authorization: `Bearer ${localStorage.getItem("token")}` };
-
+  /* Daten holen ---------------------------------------------------- */
   useEffect(() => {
-    axios
-      .get(`/api/boxes/${id}/history`, { headers: hdr })
-      .then((r) => setHist(r.data))
-      .catch(console.error);
+    (async () => {
+      try {
+        const hdr = { Authorization:`Bearer ${token}` };
+
+        const [boxRes, histRes] = await Promise.all([
+          fetch(`/api/boxes/${id}`,          { headers: hdr }),
+          fetch(`/api/boxes/${id}/history`,  { headers: hdr }),
+        ]);
+
+        if (!boxRes.ok)  throw new Error("Box existiert nicht");
+        if (!histRes.ok) throw new Error("Keine Historie gefunden");
+
+        setBox(await boxRes.json());
+        setRows(await histRes.json());
+      } catch (e) {
+        setErr(e.message);
+      }
+    })();
   }, [id]);
 
-  const fmt = (ts) =>
-    ts?.replace("T", " · ").substring(0, 19) || "—";
+  /* Rendering ------------------------------------------------------ */
+  if (err)      return <p className="p-4 text-error">{err}</p>;
+  if (!box)     return <p className="p-4">Lade …</p>;
 
   return (
-    <section className="max-w-lg mx-auto p-4 space-y-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
-          Historie – Box {id}
-        </h1>
-        <button onClick={() => navigate("/boxes")} className="btn btn-sm">
-          ↩ Zur Übersicht
-        </button>
-      </header>
+    <div className="p-4 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        Verlauf – {box.serial}
+        <span className="badge badge-outline">{box.type}</span>
+      </h1>
 
-      {hist.length === 0 && (
-        <div className="alert alert-info">
-          Für diese Box wurden noch keine Vorgänge registriert.
+      {rows?.length === 0 && (
+        <p className="opacity-60">Noch keine Historie.</p>
+      )}
+
+      {rows?.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th className="w-36">Datum</th>
+                <th className="w-32">Aktion</th>
+                <th>Bemerkung</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(ev => (
+                <tr key={ev.id}>
+                  <td>{new Date(ev.timestamp).toLocaleString()}</td>
+                  <td>
+                    <span className={`badge badge-sm badge-${color(ev.action)}`}>
+                      {ev.action}
+                    </span>
+                  </td>
+                  <td>{ev.comment || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      <ul className="timeline timeline-snap-icon timeline-vertical">
-        {hist.map((h, i) => (
-          <li key={h.id}>
-            <div className="timeline-middle">
-              <div className="badge badge-primary"></div>
-            </div>
-            <div className="timeline-start md:text-end mb-10">
-              <time className="font-mono text-sm opacity-50">
-                Vorgang #{hist.length - i}
-              </time>
-              <div className="text-lg font-black">Beladen</div>
-              {fmt(h.loaded_at)}
-            </div>
-            <div className="timeline-end mb-10">
-              <div className="text-lg font-black">Entladen</div>
-              {fmt(h.unloaded_at)}
-            </div>
-            <hr />
-          </li>
-        ))}
-      </ul>
-    </section>
+      <Link to={`/boxes/${id}`} className="link mt-4 inline-block">
+        ← zurück
+      </Link>
+    </div>
   );
+}
+
+/* kleine Farbmap --------------------------------------------------- */
+function color(action) {
+  switch (action) {
+    case "load":   return "primary";
+    case "return": return "accent";
+    case "check":  return "success";
+    default:       return "neutral";
+  }
 }

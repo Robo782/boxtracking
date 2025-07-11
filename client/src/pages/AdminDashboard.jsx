@@ -1,55 +1,71 @@
 // client/src/pages/AdminDashboard.jsx
-import { Link, useNavigate } from "react-router-dom";
-import ResetDatabaseButton from "../components/ResetDatabaseButton";
-import SeedBoxesButton     from "../components/SeedBoxesButton";
+import { useEffect, useState } from "react";
+import { Link }                from "react-router-dom";
+
+const token = localStorage.getItem("token");
 
 export default function AdminDashboard() {
-  const role = localStorage.getItem("role");
-  const nav  = useNavigate();
+  const [stats, setStats] = useState(null);
 
-  if (role !== "admin") {
-    nav("/boxes");
-    return null;
-  }
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/stats", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("Stats-API fehlt");
+        setStats(await res.json());
+      } catch {
+        // Fallback-Mock, falls Endpoint (noch) nicht existiert
+        setStats({
+          boxes_total:   "—",
+          boxes_onTour:  "—",
+          boxes_pending: "—",
+          users:         "—",
+          last_backup:   "—",
+        });
+      }
+    })();
+  }, []);
+
+  if (!stats) return <p className="p-4">Lade …</p>;
 
   return (
-    <section className="max-w-3xl mx-auto p-4 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">⚙️ Admin-Dashboard</h1>
-        <button onClick={() => nav("/boxes")} className="btn btn-sm">
-          ↩ Übersicht
-        </button>
-      </header>
+    <div className="p-6 max-w-5xl mx-auto flex flex-col gap-6">
+      <h1 className="text-3xl font-bold">Admin Dashboard</h1>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link to="/admin/users" className="card bg-base-100 shadow hover:shadow-lg">
-          <div className="card-body items-center">
-            <h2 className="card-title">👥 Benutzerverwaltung</h2>
-            <p>Neue Benutzer anlegen und Rollen vergeben.</p>
-          </div>
-        </Link>
-
-        <Link to="/admin/boxes" className="card bg-base-100 shadow hover:shadow-lg">
-          <div className="card-body items-center">
-            <h2 className="card-title">📦 Box-Verwaltung</h2>
-            <p>Status & Felder aller Kisten editieren.</p>
-          </div>
-        </Link>
-
-        <Link to="/admin/backup" className="card bg-base-100 shadow hover:shadow-lg">
-          <div className="card-body items-center">
-            <h2 className="card-title">💾 Backup / Restore</h2>
-            <p>SQLite sichern & wiederherstellen.</p>
-          </div>
-        </Link>
+      {/* Stat-Kacheln ------------------------------------------------ */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        <Stat label="Kisten gesamt"  val={stats.boxes_total}   icon="📦"  />
+        <Stat label="Unterwegs"      val={stats.boxes_onTour}  icon="🚚"  />
+        <Stat label="Rücklauf offen" val={stats.boxes_pending} icon="↩️"  />
+        <Stat label="Benutzer"       val={stats.users}         icon="👤"  />
+        <Stat label="Letztes Backup" val={stats.last_backup}   icon="💾" wide />
       </div>
 
-      <div className="card bg-base-100 shadow">
-        <div className="card-body flex flex-wrap gap-3">
-          <ResetDatabaseButton className="btn btn-error"/>
-          <SeedBoxesButton     className="btn btn-primary"/>
+      {/* Schnellzugriff-Buttons ------------------------------------ */}
+      <div className="flex flex-wrap gap-2 mt-2">
+        <Link className="btn btn-primary"  to="/admin/boxes">Box-Pflege</Link>
+        <Link className="btn btn-secondary"to="/admin/users">User Mgmt</Link>
+        <Link className="btn btn-accent"   to="/admin/backup">Backup / Restore</Link>
+      </div>
+    </div>
+  );
+}
+
+/* Mini-Card-Komponente ------------------------------------------- */
+function Stat({ label, val, icon, wide=false }) {
+  return (
+    <div className={`card bg-base-200 shadow ${wide ? "col-span-2" : ""}`}>
+      <div className="card-body p-3">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{icon}</span>
+          <div>
+            <p className="text-sm opacity-70">{label}</p>
+            <p className="text-xl font-bold">{val}</p>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

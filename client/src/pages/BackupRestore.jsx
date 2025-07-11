@@ -1,77 +1,77 @@
 // client/src/pages/BackupRestore.jsx
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import axios from "axios";
+
+const token = localStorage.getItem("token");
 
 export default function BackupRestore() {
-  const [file,     setFile]     = useState(null);
-  const [message,  setMessage]  = useState("");
+  const [downloading, setDL] = useState(false);
+  const [restoring,   setRS] = useState(false);
 
-  const cfg = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
-
-  const handleBackup = async () => {
+  /* ---------- Backup herunterladen ---------- */
+  async function downloadDump() {
+    setDL(true);
     try {
-      const { data } = await axios.get("/api/admin/backup", { ...cfg, responseType: "blob" });
-      const url = window.URL.createObjectURL(new Blob([data]));
-      const a   = document.createElement("a");
-      a.href = url;
-      a.download = "backup.sqlite";
+      const res = await fetch("/api/admin/backup", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Backup fehlgeschlagen");
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = Object.assign(document.createElement("a"), {
+        href: url,
+        download: "boxtracker-backup.sqlite",
+      });
       a.click();
-      setMessage("✅ Backup gespeichert");
-    } catch {
-      setMessage("❌ Backup fehlgeschlagen");
-    }
-  };
+      URL.revokeObjectURL(url);
+    } catch (e) { alert(e.message); }
+    finally     { setDL(false);     }
+  }
 
-  const handleRestore = async (e) => {
+  /* ---------- Backup hochladen ---------- */
+  async function restore(e) {
     e.preventDefault();
-    if (!file) return setMessage("Bitte eine Datei auswählen");
+    const file = e.target.dump.files[0];
+    if (!file) { alert("Bitte Datei wählen"); return; }
+    if (!confirm("Bestehende DB wird überschrieben – sicher?")) return;
+
+    setRS(true);
+    const form = new FormData(); form.append("dump", file);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      await axios.post("/api/admin/restore", form, cfg);
-      setMessage("✅ Wiederherstellung erfolgreich");
-    } catch {
-      setMessage("❌ Wiederherstellung fehlgeschlagen");
-    }
-  };
+      const res = await fetch("/api/admin/backup", {
+        method : "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+        body   : form
+      });
+      if (!res.ok) throw new Error("Restore fehlgeschlagen");
+      alert("Backup erfolgreich eingespielt – Seite wird neu geladen");
+      location.href = "/login";
+    } catch (e) { alert(e.message); }
+    finally     { setRS(false);     }
+  }
 
+  /* ---------- UI ---------- */
   return (
-    <section className="max-w-xl mx-auto p-4 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">💾 Backup & Restore</h1>
-        <Link to="/admin" className="btn btn-sm">↩ Dashboard</Link>
-      </header>
+    <div className="p-6 max-w-lg mx-auto flex flex-col gap-6">
+      <h1 className="text-2xl font-bold">Backup / Restore</h1>
 
-      <div className="card bg-base-100 shadow">
-        <div className="card-body space-y-4">
-          {/* Backup */}
-          <div>
-            <h2 className="font-semibold text-lg">⬇️ Backup erstellen</h2>
-            <button onClick={handleBackup} className="btn btn-primary mt-2">
-              Backup herunterladen
-            </button>
-          </div>
-
-          <div className="divider"></div>
-
-          {/* Restore */}
-          <form onSubmit={handleRestore} className="space-y-3">
-            <h2 className="font-semibold text-lg">♻️ Backup einspielen</h2>
-            <input
-              type="file"
-              accept=".sqlite"
-              onChange={(e) => setFile(e.target.files[0])}
-              className="file-input file-input-bordered w-full"
-            />
-            <button className="btn btn-secondary">Datenbank wiederherstellen</button>
-          </form>
-
-          {message && (
-            <div className="alert alert-info text-sm mt-2">{message}</div>
-          )}
-        </div>
+      <div className="card bg-base-200 shadow p-4 flex flex-col gap-3">
+        <h2 className="font-semibold">Backup herunterladen</h2>
+        <button onClick={downloadDump}
+                className={`btn btn-primary ${downloading && "btn-disabled"}`}>
+          {downloading ? "Erstelle …" : "Dump herunterladen"}
+        </button>
       </div>
-    </section>
+
+      <form onSubmit={restore}
+            className="card bg-base-200 shadow p-4 flex flex-col gap-3">
+        <h2 className="font-semibold">Backup einspielen</h2>
+        <input name="dump" type="file"
+               accept=".sqlite,.db"
+               className="file-input file-input-bordered w-full" />
+        <button className={`btn btn-error ${restoring && "btn-disabled"}`}>
+          {restoring ? "Stelle wieder her …" : "Wiederherstellen"}
+        </button>
+      </form>
+    </div>
   );
 }

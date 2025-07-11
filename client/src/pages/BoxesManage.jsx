@@ -1,163 +1,124 @@
 // client/src/pages/BoxesManage.jsx
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import { useEffect, useState, useMemo } from "react";
+import StatusBadge from "@/components/StatusBadge";
 
-/* Status-Mapping */
-const toFields = (v) =>
-  ({
-    verfügbar: { departed: 0, returned: 0, is_checked: 0 },
-    unterwegs : { departed: 1, returned: 0, is_checked: 0 },
-    zurück    : { departed: 1, returned: 1, is_checked: 0 },
-    geprüft   : { departed: 1, returned: 1, is_checked: 1 },
-  }[v]);
-
-const current = (b) =>
-  !b.departed
-    ? "verfügbar"
-    : b.departed && !b.returned
-      ? "unterwegs"
-      : b.returned && !b.is_checked
-        ? "zurück"
-        : "geprüft";
+const token = localStorage.getItem("token");
 
 export default function BoxesManage() {
-  const role = localStorage.getItem("role");
-  const nav  = useNavigate();
+  const [boxes, setBoxes]          = useState([]);
+  const [sel,   setSel]            = useState(new Set());
+  const [statF, setStatF]          = useState("all");
+  const [typeF, setTypeF]          = useState("all");
 
-  const cfg = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
+  /* ---------- Daten laden ---------- */
+  const load = () =>
+    fetch("/api/boxes", {
+      headers:{ Authorization:`Bearer ${token}` }
+    }).then(r=>r.json()).then(setBoxes);
 
-  const [boxes, setBoxes] = useState([]);
-  const [err,   setErr]   = useState("");
+  useEffect(load, []);
 
-  /* Laden + Guard */
-  useEffect(() => {
-    if (role !== "admin") {
-      nav("/boxes");
-      return;
-    }
-    (async () => {
-      try {
-        const { data } = await axios.get("/api/boxes", cfg);
-        setBoxes(data);
-      } catch {
-        setErr("⚠️ Boxen konnten nicht geladen werden");
-      }
-    })();
-  }, [role, nav]);
+  /* ---------- Filter ---------- */
+  const list = useMemo(() =>
+    boxes.filter(b =>
+      (statF==="all" || b.status===statF) &&
+      (typeF==="all" || b.type  ===typeF)
+    ), [boxes, statF, typeF]);
 
-  /* Patch */
-  const save = async (id, payload) => {
-    try {
-      await axios.patch(`/api/admin/boxes/${id}`, payload, cfg);
-      setBoxes((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, ...payload } : b))
-      );
-    } catch {
-      setErr("⚠️ Fehler beim Speichern");
-    }
+  /* ---------- Auswahl ---------- */
+  const toggle = id => {
+    const s = new Set(sel);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setSel(s);
   };
+  const allSel = list.every(b=>sel.has(b.id));
 
-  return (
-    <section className="max-w-6xl mx-auto p-4 space-y-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">🛠 Box-Verwaltung</h1>
-        <Link to="/admin" className="btn btn-sm">↩ Dashboard</Link>
-      </header>
-
-      {err && <div className="alert alert-error">{err}</div>}
-
-      {boxes.length === 0 ? (
-        <div className="alert alert-info">Keine Boxen vorhanden.</div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {boxes.map((b) => (
-            <BoxCard
-              key={b.id}
-              box={b}
-              current={current(b)}
-              onSave={save}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/* ---------- Card-Komponente ---------- */
-function BoxCard({ box, current, onSave }) {
-  const [f, setF] = useState({
-    serial:        box.serial,
-    cycles:        box.cycles,
-    device_serial: box.device_serial ?? "",
-    status:        current,
-    checked_by:    box.checked_by  ?? "",
-  });
-
-  const change = (k, v) => setF({ ...f, [k]: v });
-
-  const patch = () => {
-    onSave(box.id, {
-      serial:        f.serial,
-      cycles:        +f.cycles,
-      device_serial: f.device_serial,
-      checked_by:    f.checked_by,
-      ...toFields(f.status),
+  /* ---------- Aktion ---------- */
+  async function bulk(action) {
+    if (sel.size===0) return alert("Nichts ausgewählt");
+    const ids = Array.from(sel);
+    await fetch("/api/admin/boxes/bulk", {
+      method:"PUT",
+      headers:{
+        "Content-Type":"application/json",
+        Authorization:`Bearer ${token}`
+      },
+      body: JSON.stringify({ ids, action })
     });
-  };
+    setSel(new Set());
+    load();
+  }
 
+  /* ---------- UI ---------- */
   return (
-    <article className="card bg-base-100 shadow">
-      <div className="card-body space-y-3">
-        <h2 className="card-title text-sm">{f.serial}</h2>
+    <div className="p-4 max-w-5xl mx-auto flex flex-col gap-4">
+      <h1 className="text-2xl font-bold">Box-Pflege</h1>
 
-        <div className="flex gap-2">
-          <input
-            value={f.serial}
-            onChange={(e) => change("serial", e.target.value)}
-            className="input input-bordered flex-1"
-          />
-          <input
-            type="number"
-            value={f.cycles}
-            onChange={(e) => change("cycles", e.target.value)}
-            className="input input-bordered w-24 text-center"
-          />
-        </div>
+      {/* Filterzeile */}
+      <div className="flex gap-2 items-center flex-wrap">
+        <select className="select select-bordered select-sm"
+                value={statF} onChange={e=>setStatF(e.target.value)}>
+          <option value="all">Status: Alle</option>
+          <option>Verfügbar</option><option>Unterwegs</option>
+          <option>Rücklauf</option><option>Geprüft</option>
+        </select>
 
-        <input
-          value={f.device_serial}
-          onChange={(e) => change("device_serial", e.target.value)}
-          placeholder="Device-Serial"
-          className="input input-bordered w-full"
-        />
+        <select className="select select-bordered select-sm"
+                value={typeF} onChange={e=>setTypeF(e.target.value)}>
+          <option value="all">Typ: Alle</option>
+          <option>PU-S</option><option>PU-M</option>
+          <option>PR-M</option>
+        </select>
 
-        <div className="flex gap-2">
-          <select
-            value={f.status}
-            onChange={(e) => change("status", e.target.value)}
-            className="select select-bordered flex-1"
-          >
-            <option value="verfügbar">verfügbar</option>
-            <option value="unterwegs">unterwegs</option>
-            <option value="zurück">zurück</option>
-            <option value="geprüft">geprüft</option>
-          </select>
-          <input
-            value={f.checked_by}
-            onChange={(e) => change("checked_by", e.target.value)}
-            placeholder="Prüfer"
-            className="input input-bordered w-32"
-          />
-        </div>
-
-        <div className="card-actions justify-end">
-          <button onClick={patch} className="btn btn-sm btn-primary">
-            💾 Speichern
-          </button>
-        </div>
+        <span className="ml-auto text-sm opacity-60">
+          {sel.size} ausgewählt
+        </span>
       </div>
-    </article>
+
+      {/* Aktionen */}
+      <div className="flex gap-2 flex-wrap">
+        <button className="btn btn-sm"
+                onClick={()=>bulk("load")}>Auslagern</button>
+        <button className="btn btn-sm btn-accent"
+                onClick={()=>bulk("return")}>Zurücknehmen</button>
+        <button className="btn btn-sm btn-info"
+                onClick={()=>bulk("check")}>Prüfen</button>
+        <button className="btn btn-sm btn-outline btn-error"
+                onClick={()=>bulk("reset")}>Status zurücksetzen</button>
+      </div>
+
+      {/* Tabelle */}
+      <div className="overflow-x-auto">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>
+                <input type="checkbox"
+                       checked={allSel}
+                       onChange={()=>setSel(allSel ? new Set() : new Set(list.map(b=>b.id)))} />
+              </th>
+              <th>Serial</th><th>Typ</th><th>Status</th>
+              <th>Cycles</th><th>Device</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(b=>(
+              <tr key={b.id}>
+                <td>
+                  <input type="checkbox"
+                         checked={sel.has(b.id)}
+                         onChange={()=>toggle(b.id)} />
+                </td>
+                <td>{b.serial}</td>
+                <td>{b.type}</td>
+                <td><StatusBadge status={b.status} /></td>
+                <td>{b.cycles}</td>
+                <td>{b.deviceSerial||"—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

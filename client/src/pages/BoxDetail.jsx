@@ -1,210 +1,92 @@
 // client/src/pages/BoxDetail.jsx
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import axios from "axios";
+import { useParams, Link, useNavigate } from "react-router-dom";
 
-/* Regex */
-const SERIAL_RX = /^[A-Za-z0-9]{4}-[A-Za-z0-9]{2}$/;
-const PCC_RX    = /^PCC \d{5} [A-Z]{2,3}$/;
-const CHECK_RX  = /^[A-Za-z]{2,8}\d?$/;
+const token = localStorage.getItem("token");
+const role  = localStorage.getItem("role");
 
 export default function BoxDetail() {
-  const { id }     = useParams();
-  const navigate   = useNavigate();
-  const [box, setBox]   = useState(null);
-  const [phase, setPhase] = useState("");
+  const { id }  = useParams();
+  const nav     = useNavigate();
+  const [box,   setBox]   = useState(null);
+  const [error, setError] = useState("");
 
-  const hdr = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+  const hdr = { Authorization:`Bearer ${token}` };
 
-  /* -------- Box holen -------- */
-  useEffect(() => {
-    axios.get(`/api/boxes/${id}`, { headers: hdr }).then((r) => {
-      setBox(r.data);
-      setPhase(
-        !r.data.departed
-          ? "load"
-          : r.data.departed && !r.data.returned
-            ? "return"
-            : r.data.returned && !r.data.is_checked
-              ? "check"
-              : "done"
-      );
-    });
-  }, [id]);
+  /* ---------- Daten holen ---------- */
+  const load = () =>
+    fetch(`/api/boxes/${id}`, { headers: hdr })
+      .then(r => r.ok ? r.json() : Promise.reject("404"))
+      .then(setBox)
+      .catch(() => setError("Kiste nicht gefunden"));
 
-  /* -------- Speichern -------- */
-  const save = async () => {
-    if (phase === "load") {
-      await axios.put(
-        `/api/boxes/${id}/load`,
-        {
-          device_serial: box.device_serial.trim().toUpperCase(),
-          pcc_id:        box.pcc_id.trim().toUpperCase(),
-        },
-        { headers: hdr }
-      );
-    } else if (phase === "return") {
-      await axios.put(`/api/boxes/${id}/return`, null, { headers: hdr });
-    } else if (phase === "check") {
-      await axios.put(
-        `/api/boxes/${id}/check`,
-        { checked_by: box.checked_by.trim().toUpperCase() },
-        { headers: hdr }
-      );
-    }
-    navigate("/boxes");
+  useEffect(load, [id]);
+
+  /* ---------- Aktion ermitteln ---------- */
+  if (!box && !error) return <p className="p-4">Lade …</p>;
+  if (error)          return <p className="p-4 text-error">{error}</p>;
+
+  const action = !box.departed
+    ? { label:"Auslagern",   api:"load",    next:"Unterwegs",   css:"primary"  }
+    : box.departed && !box.returned
+    ? { label:"Zurücknehmen",api:"return",  next:"Rücklauf",    css:"accent"   }
+    : box.returned && !box.is_checked
+    ? { label:"Prüfen",      api:"check",   next:"Geprüft",     css:"info"     }
+    : null; // bereits geprüft
+
+  const doAction = async () => {
+    if (!action) return;
+    const ok = confirm(`Kiste wirklich ${action.label.toLowerCase()}?`);
+    if (!ok) return;
+    await fetch(`/api/boxes/${id}/${action.api}`, { method:"PUT", headers:hdr });
+    load();                       // reload Detail
   };
 
-  /* -------- Validation -------- */
-  const okSerial = SERIAL_RX.test((box?.device_serial || "").trim().toUpperCase());
-  const okPcc    = PCC_RX.test   ((box?.pcc_id        || "").trim().toUpperCase());
-  const okCheck  = CHECK_RX.test ((box?.checked_by    || "").trim().toUpperCase());
+  const delBox = async () => {
+    const ok = confirm("Kiste endgültig löschen – sicher?");
+    if (!ok) return;
+    await fetch(`/api/boxes/${id}`, { method:"DELETE", headers:hdr });
+    nav("/boxes");
+  };
 
-  const canSave =
-    (phase === "load"   && okSerial && okPcc) ||
-    (phase === "return") ||
-    (phase === "check"  && okCheck && box.is_checked);
-
-  if (!box)
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        ⏳ Lade Daten…
-      </div>
-    );
-
-  /* -------- UI -------- */
+  /* ---------- UI ---------- */
   return (
-    <section className="max-w-xl mx-auto p-4 space-y-4">
-      {/* Header */}
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
-          Box&nbsp;{box.serial}
-        </h1>
-        <div className="flex gap-2">
-          <Link to={`/boxes/${id}/history`} className="btn btn-sm btn-outline">
-            Historie
-          </Link>
-          <button onClick={() => navigate("/boxes")} className="btn btn-sm">
-            ↩ Zur Übersicht
+    <div className="p-4 max-w-xl mx-auto flex flex-col gap-4">
+      <h1 className="text-2xl font-bold flex items-center gap-3">
+        📦 {box.serial}
+        <span className="badge badge-outline">{box.type}</span>
+      </h1>
+
+      <table className="table border">
+        <tbody>
+          <tr><th>Status</th><td>{box.status}</td></tr>
+          <tr><th>Cycles</th><td>{box.cycles}</td></tr>
+          <tr><th>Device</th><td>{box.deviceSerial || "—"}</td></tr>
+          <tr><th>Departed</th><td>{box.departed ?? "—"}</td></tr>
+          <tr><th>Returned</th><td>{box.returned ?? "—"}</td></tr>
+          <tr><th>Checked</th><td>{box.is_checked ? "✅" : "—"}</td></tr>
+        </tbody>
+      </table>
+
+      <div className="flex gap-2">
+        {action && (
+          <button onClick={doAction} className={`btn btn-${action.css}`}>
+            {action.label}
           </button>
-        </div>
-      </header>
+        )}
 
-      {/* Hinweis */}
-      {phase === "load" && (
-        <div className="alert alert-info text-sm">
-          ➊ Device-Serial <code>AAAA-AA</code> <b>und</b> PCC-ID{" "}
-          <code>PCC&nbsp;12345&nbsp;AB</code> eingeben → Save
-        </div>
-      )}
-      {phase === "return" && (
-        <div className="alert alert-warning text-sm">
-          ➋ Box angekommen → Save
-        </div>
-      )}
-      {phase === "check" && (
-        <div className="alert alert-success text-sm">
-          ➌ Kürzel eingeben&nbsp;✔︎ anhaken → Save
-        </div>
-      )}
-      {phase === "done" && (
-        <div className="alert alert-success">
-          ✅ Box wieder verfügbar
-        </div>
-      )}
+        <Link to={`/boxes/${id}/history`} className="btn btn-outline">
+          History
+        </Link>
 
-      {/* Formular-Card */}
-      {phase !== "done" && (
-        <div className="card bg-base-100 shadow">
-          <div className="card-body space-y-3">
-            {phase === "load" && (
-              <>
-                <label className="form-control w-full">
-                  <span className="label-text">Device Serial</span>
-                  <input
-                    value={box.device_serial ?? ""}
-                    onChange={(e) =>
-                      setBox({ ...box, device_serial: e.target.value })
-                    }
-                    className={`input input-bordered w-full ${okSerial ? "" : "input-error"}`}
-                    placeholder="AAAA-AA"
-                  />
-                  {!okSerial && (
-                    <span className="text-error text-xs mt-1">
-                      Format ####-## / AAA1-23
-                    </span>
-                  )}
-                </label>
+        {role==="admin" && (
+          <button onClick={delBox} className="btn btn-error btn-outline ml-auto">
+            Löschen
+          </button>
+        )}
+      </div>
 
-                <label className="form-control w-full">
-                  <span className="label-text">PCC-ID</span>
-                  <input
-                    value={box.pcc_id ?? ""}
-                    onChange={(e) => setBox({ ...box, pcc_id: e.target.value })}
-                    className={`input input-bordered w-full ${okPcc ? "" : "input-error"}`}
-                    placeholder="PCC 12345 AB"
-                  />
-                  {!okPcc && (
-                    <span className="text-error text-xs mt-1">
-                      PCC 12345 AB / ABC
-                    </span>
-                  )}
-                </label>
-              </>
-            )}
-
-            {phase === "check" && (
-              <>
-                <label className="cursor-pointer flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={box.is_checked}
-                    onChange={(e) =>
-                      setBox({ ...box, is_checked: e.target.checked })
-                    }
-                    className="checkbox checkbox-success"
-                  />
-                  Kontrolle durchgeführt
-                </label>
-
-                <label className="form-control w-40">
-                  <span className="label-text">Prüfer-Kürzel</span>
-                  <input
-                    value={box.checked_by ?? ""}
-                    onChange={(e) =>
-                      setBox({ ...box, checked_by: e.target.value })
-                    }
-                    className={`input input-bordered ${okCheck ? "" : "input-error"}`}
-                    placeholder="AB12"
-                  />
-                  {!okCheck && (
-                    <span className="text-error text-xs mt-1">
-                      2–8 Buchstaben (+ optional Zahl)
-                    </span>
-                  )}
-                </label>
-              </>
-            )}
-
-            {/* Buttons */}
-            <div className="card-actions justify-end pt-2">
-              <button
-                onClick={save}
-                disabled={!canSave}
-                className="btn btn-primary"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => navigate("/boxes")}
-                className="btn btn-ghost"
-              >
-                Abbrechen
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
+      <Link to="/boxes" className="link mt-4">← Zurück zur Übersicht</Link>
+    </div>
   );
 }

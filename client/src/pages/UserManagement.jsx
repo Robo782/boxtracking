@@ -1,128 +1,121 @@
 // client/src/pages/UserManagement.jsx
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import axios from "axios";
+
+const token = localStorage.getItem("token");
 
 export default function UserManagement() {
-  const nav  = useNavigate();
-  const role = localStorage.getItem("role");
+  const [list,  setList ]  = useState([]);
+  const [name,  setName ]  = useState("");
+  const [role,  setRole ]  = useState("user");
+  const [pass,  setPass ]  = useState("");
+  const [err,   setErr  ]  = useState("");
 
-  const cfg = { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } };
-
-  /* Guards */
-  useEffect(() => {
-    if (role !== "admin") nav("/boxes");
-  }, [role, nav]);
-
-  /* State */
-  const [users, setUsers] = useState([]);
-  const [form,  setForm]  = useState({ username: "", password: "", role: "user" });
-  const [err,   setErr]   = useState("");
-
-  /* Laden */
-  const loadUsers = async () => {
-    try {
-      const { data } = await axios.get("/api/admin/users", cfg);
-      setUsers(data);
-    } catch {
-      setErr("⚠️ Benutzer konnten nicht geladen werden");
-    }
+  const hdr = {
+    "Content-Type":"application/json",
+    Authorization: `Bearer ${token}`
   };
-  useEffect(() => { loadUsers(); }, []);
 
-  /* Anlegen */
-  const addUser = async (e) => {
+  /* ---------- laden ---------- */
+  const load = () =>
+    fetch("/api/admin/users", { headers: hdr })
+      .then(r=>r.json()).then(setList)
+      .catch(()=> setErr("Konnte Userliste nicht laden"));
+
+  useEffect(load, []);
+
+  /* ---------- neu anlegen ---------- */
+  async function create(e) {
     e.preventDefault();
-    setErr("");
     try {
-      await axios.post("/api/admin/users", form, cfg);
-      setForm({ username: "", password: "", role: "user" });
-      loadUsers();
-    } catch (e) {
-      setErr(e.response?.data?.error || "Fehler beim Speichern");
-    }
+      const body = JSON.stringify({ username:name, password:pass || "changeme", role });
+      const res  = await fetch("/api/admin/users", { method:"POST", headers: hdr, body });
+      if (!res.ok) throw new Error("Fehler beim Anlegen");
+      setName(""); setPass(""); setRole("user");
+      load();
+    } catch(e){ alert(e.message); }
+  }
+
+  /* ---------- Passwort reset ---------- */
+  const resetPw = async id => {
+    const ok = confirm("Passwort auf 'changeme' zurücksetzen?");
+    if (!ok) return;
+    await fetch(`/api/admin/users/${id}/reset`, { method:"PUT", headers: hdr });
+    alert("Passwort wurde zurückgesetzt: changeme");
   };
 
+  /* ---------- Rolle umschalten ---------- */
+  const toggleRole = async (id, cur) => {
+    const newRole = cur==="admin" ? "user" : "admin";
+    await fetch(`/api/admin/users/${id}`, {
+      method:"PUT", headers:hdr,
+      body: JSON.stringify({ role:newRole })
+    });
+    load();
+  };
+
+  /* ---------- löschen ---------- */
+  const delUser = async id => {
+    if (!confirm("User wirklich löschen?")) return;
+    await fetch(`/api/admin/users/${id}`, { method:"DELETE", headers:hdr });
+    load();
+  };
+
+  /* ---------- UI ---------- */
   return (
-    <section className="max-w-4xl mx-auto p-4 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">👥 Benutzerverwaltung</h1>
-        <Link to="/admin" className="btn btn-sm">↩ Dashboard</Link>
-      </header>
+    <div className="p-4 max-w-xl mx-auto flex flex-col gap-6">
+      <h1 className="text-2xl font-bold">Benutzerverwaltung</h1>
 
-      {/* Tabelle */}
-      <div className="card bg-base-100 shadow">
-        <div className="card-body">
-          <h2 className="card-title">Bestehende Benutzer</h2>
-          {users.length === 0 ? (
-            <div className="alert alert-info mt-3">Keine Benutzer vorhanden.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table table-sm">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Username</th>
-                    <th>Rolle</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td>{u.id}</td>
-                      <td>{u.username}</td>
-                      <td>
-                        <span className="badge badge-outline">{u.role}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {err && <div className="text-error text-sm mt-2">{err}</div>}
-        </div>
+      {/* Neuen User anlegen */}
+      <form onSubmit={create} className="card bg-base-200 shadow p-4 flex flex-col gap-3">
+        <h2 className="font-semibold">Neuer Benutzer</h2>
+        <input
+          required placeholder="Username"
+          className="input input-bordered"
+          value={name} onChange={e=>setName(e.target.value)}
+        />
+        <input
+          placeholder="Passwort (optional)"
+          className="input input-bordered"
+          value={pass} onChange={e=>setPass(e.target.value)}
+        />
+        <select className="select select-bordered"
+                value={role} onChange={e=>setRole(e.target.value)}>
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+        <button className="btn btn-primary self-start">Anlegen</button>
+      </form>
+
+      {/* Userliste */}
+      {err && <p className="text-error">{err}</p>}
+      <div className="overflow-x-auto">
+        <table className="table">
+          <thead><tr><th>User</th><th>Rolle</th><th>Aktionen</th></tr></thead>
+          <tbody>
+            {list.map(u=>(
+              <tr key={u.id}>
+                <td>{u.username}</td>
+                <td>
+                  <span className={`badge badge-${u.role==="admin"?"warning":"neutral"}`}>
+                    {u.role}
+                  </span>
+                </td>
+                <td className="flex gap-2">
+                  <button className="btn btn-xs" onClick={()=>toggleRole(u.id,u.role)}>
+                    Rolle ↺
+                  </button>
+                  <button className="btn btn-xs btn-info" onClick={()=>resetPw(u.id)}>
+                    PW reset
+                  </button>
+                  <button className="btn btn-xs btn-error" onClick={()=>delUser(u.id)}>
+                    Löschen
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-
-      {/* Formular */}
-      <div className="card bg-base-100 shadow">
-        <form onSubmit={addUser} className="card-body space-y-3">
-          <h2 className="card-title">Neuen Benutzer anlegen</h2>
-
-          <input
-            type="text"
-            placeholder="Username"
-            value={form.username}
-            onChange={(e) => setForm({ ...form, username: e.target.value })}
-            className="input input-bordered w-full"
-            required
-          />
-
-          <input
-            type="password"
-            placeholder="Passwort"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            className="input input-bordered w-full"
-            required
-          />
-
-          <select
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-            className="select select-bordered w-full"
-          >
-            <option value="user">user</option>
-            <option value="admin">admin</option>
-          </select>
-
-          <button className="btn btn-primary mt-2">
-            ➕ Speichern
-          </button>
-
-          {err && <div className="text-error text-sm">{err}</div>}
-        </form>
-      </div>
-    </section>
+    </div>
   );
 }
