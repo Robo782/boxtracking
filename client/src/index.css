@@ -1,2 +1,11 @@
-@import "tailwindcss/preflight";
-@import "tailwindcss/utilities";
+/* src/index.css  ─ Tailwind 3 / 4 Skeleton  */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 👉  deine eigenen Zusatz-Styles – falls nötig
+.my-card {
+  @apply shadow-xl p-4 rounded-2xl;
+}
+*/
