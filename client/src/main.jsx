@@ -6,14 +6,14 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 
 /* Seiten */
-import Login        from "@/pages/Login.jsx";      // exakt wie die Datei heißt
-import Boxes           from "./pages/Boxes";
-import BoxDetail       from "./pages/BoxDetail";
-import BoxHistory      from "./pages/BoxHistory";
-import UserManagement  from "./pages/UserManagement";
-import AdminDashboard  from "./pages/AdminDashboard";
-import BoxesManage     from "./pages/BoxesManage";
-import BackupRestore from "./pages/BackupRestore";
+import Login           from "@/pages/login.jsx";
+import Boxes           from "@/pages/boxes.jsx";
+import BoxDetail       from "@/pages/boxdetail.jsx";
+import BoxesManage     from "@/pages/boxesmanage.jsx";
+import BoxHistory      from "@/pages/boxhistory.jsx";
+import AdminDashboard  from "@/pages/admindashboard.jsx";
+import UserManagement  from "@/pages/usermanagement.jsx";
+import BackupRestore   from "@/pages/backuprestore.jsx";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
