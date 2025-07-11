@@ -1,59 +1,37 @@
-// client/src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login           from "@/pages/Login";
-import Boxes           from "@/pages/Boxes";
-import BoxDetail       from "@/pages/BoxDetail";
-import BoxHistory      from "@/pages/BoxHistory";
-import BoxesManage     from "@/pages/BoxesManage";
-import AdminDashboard  from "@/pages/AdminDashboard";
-import UserManagement  from "@/pages/UserManagement";
-import BackupRestore   from "@/pages/BackupRestore";
+import "./index.css";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-const Protected = ({ allowed, children }) =>
-  allowed ? children : <Navigate to="/login" replace />;
 
-export default function App() {
-  const role = localStorage.getItem("role");         // "admin" | "user" | null
-  return (
+
+/* Seiten */
+import Login        from "@/pages/Login.jsx";      // exakt wie die Datei heißt
+import Boxes           from "./pages/Boxes";
+import BoxDetail       from "./pages/BoxDetail";
+import BoxHistory      from "./pages/BoxHistory";
+import UserManagement  from "./pages/UserManagement";
+import AdminDashboard  from "./pages/AdminDashboard";
+import BoxesManage     from "./pages/BoxesManage";
+import BackupRestore from "./pages/BackupRestore";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        {/* Public / User */}
+        <Route path="/"                 element={<Login />} />
+        <Route path="/boxes"            element={<Boxes />} />
+        <Route path="/box/:id"          element={<BoxDetail />} />
+        <Route path="/box/:id/history"  element={<BoxHistory />} />
 
-        {/* öffentlich nach Login */}
-        <Route
-          path="/boxes"
-          element={<Protected allowed={!!role}><Boxes /></Protected>}
-        />
-        <Route
-          path="/boxes/:id"
-          element={<Protected allowed={!!role}><BoxDetail /></Protected>}
-        />
-        <Route
-          path="/boxes/:id/history"
-          element={<Protected allowed={!!role}><BoxHistory /></Protected>}
-        />
+        {/* Admin */}
+        <Route path="/admin"            element={<AdminDashboard />} />   
+        <Route path="/admin/boxes-manage"  element={<BoxesManage />} /> 
+        <Route path="/admin/users"      element={<UserManagement />} />
+        <Route path="/admin/backup" element={<BackupRestore />} />
 
-        {/* reine Admin-Routen */}
-        <Route
-          path="/admin"
-          element={<Protected allowed={role==="admin"}><AdminDashboard /></Protected>}
-        />
-        <Route
-          path="/admin/boxes"
-          element={<Protected allowed={role==="admin"}><BoxesManage /></Protected>}
-        />
-        <Route
-          path="/admin/users"
-          element={<Protected allowed={role==="admin"}><UserManagement /></Protected>}
-        />
-        <Route
-          path="/admin/backup"
-          element={<Protected allowed={role==="admin"}><BackupRestore /></Protected>}
-        />
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to={role ? "/boxes" : "/login"} replace />} />
       </Routes>
     </BrowserRouter>
-  );
-}
+  </React.StrictMode>
+);
