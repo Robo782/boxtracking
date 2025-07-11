@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
-/* JWT-Payload kurz decodieren */
+/* JWT-Payload kurz dekodieren */
 function parseJwt(token) {
   try {
     return JSON.parse(atob(token.split(".")[1]));
@@ -11,10 +11,10 @@ function parseJwt(token) {
 }
 
 export default function NavBar() {
-  /* Erstes Rendern:  role aus localStorage  ODER  aus dem Token ziehen */
+  /* 1) initial: Rolle aus LocalStorage oder direkt aus dem Token holen */
   const [role, setRole] = useState(() => {
-    const storedRole = localStorage.getItem("role");
-    if (storedRole) return storedRole;
+    const saved = localStorage.getItem("role");
+    if (saved) return saved;
 
     const token = localStorage.getItem("token");
     return token ? parseJwt(token).role ?? null : null;
@@ -22,22 +22,21 @@ export default function NavBar() {
 
   const nav = useNavigate();
 
-  /* Reagiert auf Änderungen in localStorage (z. B. Logout in anderem Tab) */
+  /* 2) reagiert auf Änderungen aus anderen Tabs/Fenstern */
   useEffect(() => {
-    const handler = () => setRole(localStorage.getItem("role"));
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
+    const h = () => setRole(localStorage.getItem("role"));
+    window.addEventListener("storage", h);
+    return () => window.removeEventListener("storage", h);
   }, []);
 
-  /* Logout-Button */
-  const handleLogout = () => {
+  /* 3) Logout */
+  const logout = () => {
     localStorage.clear();
-    setRole(null);                  // sofortiger Re-Render
+    setRole(null);
     nav("/login", { replace: true });
   };
 
-  /* Wenn noch kein role vorhanden: nichts anzeigen (Login-Screen) */
-  if (!role) return null;
+  if (!role) return null; // Login-Seite → keine Leiste
 
   return (
     <div className="navbar bg-base-300 px-4 shadow">
@@ -45,17 +44,17 @@ export default function NavBar() {
         Device&nbsp;Box&nbsp;Tracker
       </Link>
 
-      <div className="ml-auto flex items-center gap-4">
+      <div className="ml-auto flex gap-4 items-center">
         {role === "admin" && (
           <>
-            <Link to="/admin">Dashboard</Link>
-            <Link to="/admin/boxes">Box-Pflege</Link>
-            <Link to="/admin/users">Users</Link>
-            <Link to="/admin/backup">Backup</Link>
+            <Link to="/admin"          className="link">Dashboard</Link>
+            <Link to="/boxmanage"      className="link">Box-Pflege</Link>
+            <Link to="/usermanagement" className="link">Users</Link>
+            <Link to="/backuprestore"  className="link">Backup</Link>
           </>
         )}
 
-        <button onClick={handleLogout} className="btn btn-outline btn-sm">
+        <button onClick={logout} className="btn btn-outline btn-sm">
           Logout
         </button>
       </div>

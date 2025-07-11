@@ -1,10 +1,8 @@
-// client/src/pages/AdminDashboard.jsx
 import { useEffect, useState } from "react";
-import { Link }                from "react-router-dom";
-
-const token = localStorage.getItem("token");
+import { Link } from "react-router-dom";
 
 export default function AdminDashboard() {
+  const token = localStorage.getItem("token");
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -13,58 +11,52 @@ export default function AdminDashboard() {
         const res = await fetch("/api/admin/stats", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error("Stats-API fehlt");
+        if (!res.ok) throw new Error();
         setStats(await res.json());
       } catch {
-        // Fallback-Mock, falls Endpoint (noch) nicht existiert
+        /* Fallback-Mock falls der Endpoint noch nicht existiert */
         setStats({
-          boxes_total:   "—",
-          boxes_onTour:  "—",
+          boxes_total: "—",
+          boxes_onTour: "—",
           boxes_pending: "—",
-          users:         "—",
-          last_backup:   "—",
+          users: "—",
+          last_backup: "—",
         });
       }
     })();
   }, []);
 
-  if (!stats) return <p className="p-4">Lade …</p>;
+  if (!stats) return <div className="p-6">Lade …</div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto flex flex-col gap-6">
-      <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+    <div className="p-6 space-y-8">
+      <h1 className="text-2xl font-bold">Admin-Dashboard</h1>
 
-      {/* Stat-Kacheln ------------------------------------------------ */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-        <Stat label="Kisten gesamt"  val={stats.boxes_total}   icon="📦"  />
-        <Stat label="Unterwegs"      val={stats.boxes_onTour}  icon="🚚"  />
-        <Stat label="Rücklauf offen" val={stats.boxes_pending} icon="↩️"  />
-        <Stat label="Benutzer"       val={stats.users}         icon="👤"  />
-        <Stat label="Letztes Backup" val={stats.last_backup}   icon="💾" wide />
+      {/* Stat-Kacheln */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Stat label="Boxen gesamt"  val={stats.boxes_total}  />
+        <Stat label="Unterwegs"     val={stats.boxes_onTour} />
+        <Stat label="Ungeprüft"     val={stats.boxes_pending}/>
+        <Stat label="User"          val={stats.users}        />
+        <Stat label="Letztes Backup" val={stats.last_backup} wide />
       </div>
 
-      {/* Schnellzugriff-Buttons ------------------------------------ */}
-      <div className="flex flex-wrap gap-2 mt-2">
-        <Link className="btn btn-primary"  to="/admin/boxes">Box-Pflege</Link>
-        <Link className="btn btn-secondary"to="/admin/users">User Mgmt</Link>
-        <Link className="btn btn-accent"   to="/admin/backup">Backup / Restore</Link>
+      {/* Schnellzugriffe */}
+      <div className="flex flex-wrap gap-4">
+        <Link to="/boxmanage"      className="btn">Box-Pflege</Link>
+        <Link to="/usermanagement" className="btn btn-primary">Benutzer</Link>
+        <Link to="/backuprestore"  className="btn btn-secondary">Backup</Link>
       </div>
     </div>
   );
 }
 
-/* Mini-Card-Komponente ------------------------------------------- */
-function Stat({ label, val, icon, wide=false }) {
+function Stat({ label, val, wide=false }) {
   return (
-    <div className={`card bg-base-200 shadow ${wide ? "col-span-2" : ""}`}>
-      <div className="card-body p-3">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">{icon}</span>
-          <div>
-            <p className="text-sm opacity-70">{label}</p>
-            <p className="text-xl font-bold">{val}</p>
-          </div>
-        </div>
+    <div className={`card bg-base-100 shadow ${wide ? "sm:col-span-2" : ""}`}>
+      <div className="card-body p-4">
+        <p className="text-sm opacity-60">{label}</p>
+        <p className="text-2xl font-bold">{val}</p>
       </div>
     </div>
   );
