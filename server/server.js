@@ -21,7 +21,7 @@ app.use("/api/boxes", require("./routes/boxRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 
 /* ───────── React-Static ausliefern ──── */
-const staticDir = path.join(__dirname, "../client/dist");  // wird im Dockerfile gefüllt
+const staticDir = path.join(__dirname, "static");  // wird im Dockerfile gefüllt
 app.use(express.static(staticDir));
 
 /* Single-Page-Fallback für React-Router */
