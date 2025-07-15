@@ -2,57 +2,62 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 
-const token = localStorage.getItem("token");
-const role  = localStorage.getItem("role");
-
 export default function BoxDetail() {
-  const { id }  = useParams();          // serial
-  const nav     = useNavigate();
-  const [box, setBox]   = useState(null);
-  const [error, setErr] = useState("");
+  const { id } = useParams();       // serial
+  const nav    = useNavigate();
 
-  const hdr = { Authorization: `Bearer ${token}` };
+  const [box,  setBox ] = useState(null);
+  const [err,  setErr ] = useState("");
 
-  /* ---- Laden ---------------------------------------------------------- */
-  const load = () =>
-    fetch(`/api/boxes/${id}`, { headers: hdr })
-      .then(r => (r.ok ? r.json() : Promise.reject()))
+  /* --------- Laden --------------------------------------------------- */
+  const load = () => {
+    const token = localStorage.getItem("token");
+    fetch(`/api/boxes/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : Promise.reject("Kiste nicht gefunden")))
       .then(setBox)
-      .catch(() => setErr("Kiste nicht gefunden"));
+      .catch(setErr);
+  };
 
   useEffect(load, [id]);
 
-  if (!box && !error) return <p className="p-6">Lade …</p>;
-  if (error) return <p className="p-6 text-error">{error}</p>;
+  if (!box && !err)   return <p className="p-6">Lade …</p>;
+  if (err)            return <p className="p-6 text-error">{err}</p>;
 
-  /* ---- Aktion bestimmen ---------------------------------------------- */
+  /* --------- nächste Aktion bestimmen -------------------------------- */
   const action = !box.departed
-    ? { label: "Auslagern", api: "load", css: "primary" }
+    ? { label: "Auslagern", api: "load",    css: "primary" }
     : box.departed && !box.returned
     ? { label: "Zurücknehmen", api: "return", css: "accent" }
     : box.returned && !box.is_checked
-    ? { label: "Prüfen", api: "check", css: "info" }
+    ? { label: "Prüfen",   api: "check",  css: "info" }
     : null;
 
   const doAction = async () => {
     if (!action) return;
     if (!confirm(`Kiste wirklich ${action.label.toLowerCase()}?`)) return;
-    await fetch(`/api/boxes/${id}/${action.api}`, { method: "PUT", headers: hdr });
+    const token = localStorage.getItem("token");
+    await fetch(`/api/boxes/${id}/${action.api}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+    });
     load();
   };
 
+  const role = localStorage.getItem("role");
   const delBox = async () => {
     if (!confirm("Kiste endgültig löschen?")) return;
-    await fetch(`/api/boxes/${id}`, { method: "DELETE", headers: hdr });
+    const token = localStorage.getItem("token");
+    await fetch(`/api/boxes/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
     nav("/boxes");
   };
 
-  /* ---- UI ------------------------------------------------------------- */
+  /* --------- UI ------------------------------------------------------ */
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">
-        {box.serial} &nbsp; <span className="opacity-60">{box.type}</span>
-      </h1>
+      <h1 className="text-2xl font-bold">{box.serial}</h1>
 
       <table className="table w-auto">
         <tbody>
@@ -81,9 +86,7 @@ export default function BoxDetail() {
         </button>
       )}
 
-      <Link to="/boxes" className="link block mt-4">
-        ← Zurück zur Übersicht
-      </Link>
+      <Link to="/boxes" className="link block mt-4">← Zurück</Link>
     </div>
   );
 }
