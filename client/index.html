@@ -2,15 +2,16 @@
 <html lang="de">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Device Box Tracker</title>
-
-    <!-- ⚠️  KEINE CDN-Scripts mehr – Tailwind & DaisyUI stecken im Vite-Bundle -->
-    <!-- Beim Build injiziert Vite automatisch /assets/index-xxxxx.css -->
+    <!-- Keine CDN-Skripte mehr: Tailwind + DaisyUI stecken im Vite-Bundle,
+         Vite injiziert beim Build einen <link href="/assets/index-xxxxx.css"> -->
   </head>
 
   <body class="bg-base-200 min-h-screen">
     <div id="root"></div>
 
+    <!-- React-Einstieg -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
