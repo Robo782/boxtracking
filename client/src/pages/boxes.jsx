@@ -1,101 +1,95 @@
-// client/src/pages/Boxes.jsx
+/* client/src/pages/boxes.jsx */
 import { useEffect, useState, useMemo } from "react";
-import { Link }                         from "react-router-dom";
-import FilterBar                        from "../components/FilterBar";
+import { Link } from "react-router-dom";
+import FilterBar from "../components/FilterBar";
 
-/* Helper – Token & Role aus localStorage holen */
+/* Token & Rolle aus localStorage */
 const token = localStorage.getItem("token");
-const role  = localStorage.getItem("role");          // 'admin' | 'user' | null
+const role  = localStorage.getItem("role");   // 'admin' | 'user' | null
 
 export default function Boxes() {
-  const [boxes,  setBoxes]   = useState([]);
-  const [query,  setQuery]   = useState("");         // Textsuche
-  const [stat,   setStat]    = useState("all");      // Status-Filter
-  const [type,   setType]    = useState("all");      // Typ-Filter
-  const [error,  setError]   = useState("");
+  const [boxes, setBoxes] = useState([]);
+  const [query, setQuery] = useState("");
+  const [stat , setStat ] = useState("all");
+  const [type , setType ] = useState("all");
+  const [error, setError] = useState("");
 
-  /* ---------- Daten holen ---------- */
+  /* ---- Daten holen ---------------------------------------------------- */
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/boxes", {
-          headers:{ Authorization:`Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Kisten konnten nicht geladen werden");
         setBoxes(await res.json());
-      } catch (err) { setError(err.message); }
+      } catch (err) {
+        setError(err.message);
+      }
     })();
   }, []);
 
-  /* ---------- Filterlogik ---------- */
+  /* ---- Filter --------------------------------------------------------- */
   const list = useMemo(() => {
     return boxes.filter(b => {
-      const matchStatus = stat === "all"  || b.status === stat;
-      const matchType   = type === "all"  || b.type   === type;
-      const matchQuery  = query === "" ||
-                          b.serial.toLowerCase().includes(query) ||
-                          (b.deviceSerial ?? "").toLowerCase().includes(query);
+      const matchStatus = stat === "all" || b.status === stat;
+      const matchType   = type === "all" || b.type   === type;
+      const matchQuery  =
+        query === "" ||
+        b.serial.toLowerCase().includes(query) ||
+        (b.deviceSerial ?? "").toLowerCase().includes(query);
       return matchStatus && matchType && matchQuery;
     });
   }, [boxes, stat, type, query]);
 
-  /* ---------- Rendering ---------- */
+  /* ---- UI ------------------------------------------------------------- */
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
-        📦 Übersicht
-        <span className="text-sm font-normal badge badge-outline">
-          {list.length}/{boxes.length}
-        </span>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">
+        Übersicht <span className="opacity-60">{list.length}/{boxes.length}</span>
       </h1>
 
-      <FilterBar
-        status={stat} setStatus={setStat}
-        type={type}   setType={setType}
-        query={query} setQuery={setQuery}
-      />
+      <FilterBar {...{ query, setQuery, stat, setStat, type, setType }} />
 
-      {error && <p className="text-error my-4">{error}</p>}
+      {error && <p className="text-error">{error}</p>}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {list.map(box => (
-          <div key={box.id} className="card bg-base-200 shadow">
+          <div key={box.id} className="card bg-base-100 shadow">
             <div className="card-body p-4">
-              <h3 className="card-title text-lg">
-                {box.serial}{" "}
-                <span className="badge badge-outline">{box.type}</span>
-              </h3>
+              <h2 className="card-title">
+                {box.serial} &nbsp; <span className="opacity-60">{box.type}</span>
+              </h2>
 
-              <ul className="text-sm leading-6">
-                <li>Status: <b>{box.status}</b></li>
-                <li>Cycles: {box.cycles}</li>
-                <li>Device: {box.deviceSerial || "—"}</li>
+              <ul className="text-sm space-y-0.5">
+                <li>Status:  {box.status}</li>
+                <li>Cycles:  {box.cycles}</li>
+                <li>Device:  {box.deviceSerial || "—"}</li>
               </ul>
 
-              <div className="card-actions justify-end mt-2">
-                <Link to={`/boxes/${box.id}`} className="btn btn-sm btn-primary">
-                  🔍 Details
+              <div className="mt-2 flex gap-2">
+                {/* 👉 Link korrigiert */}
+                <Link to={`/box/${box.serial}`} className="btn btn-sm btn-primary">
+                  Details
                 </Link>
 
                 {role === "admin" && (
                   <Link
-                    to={`/admin/boxes/${box.id}`}
-                    className="btn btn-sm btn-secondary"
+                    to={`/boxmanage?id=${box.id}`}
+                    className="btn btn-sm"
                   >
-                    🛠 Manage
+                    Manage
                   </Link>
                 )}
               </div>
             </div>
           </div>
         ))}
-
-        {list.length === 0 && !error && (
-          <p className="col-span-full text-center opacity-60 mt-10">
-            Keine Kisten gefunden 🤷‍♂️
-          </p>
-        )}
       </div>
+
+      {list.length === 0 && !error && (
+        <p className="opacity-60 text-center">Keine Kisten gefunden 🤷‍♂️</p>
+      )}
     </div>
   );
 }

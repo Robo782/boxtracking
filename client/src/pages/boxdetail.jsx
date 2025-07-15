@@ -1,4 +1,4 @@
-// client/src/pages/BoxDetail.jsx
+/* client/src/pages/boxdetail.jsx */
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 
@@ -6,87 +6,84 @@ const token = localStorage.getItem("token");
 const role  = localStorage.getItem("role");
 
 export default function BoxDetail() {
-  const { id }  = useParams();
+  const { id }  = useParams();          // serial
   const nav     = useNavigate();
-  const [box,   setBox]   = useState(null);
-  const [error, setError] = useState("");
+  const [box, setBox]   = useState(null);
+  const [error, setErr] = useState("");
 
-  const hdr = { Authorization:`Bearer ${token}` };
+  const hdr = { Authorization: `Bearer ${token}` };
 
-  /* ---------- Daten holen ---------- */
+  /* ---- Laden ---------------------------------------------------------- */
   const load = () =>
     fetch(`/api/boxes/${id}`, { headers: hdr })
-      .then(r => r.ok ? r.json() : Promise.reject("404"))
+      .then(r => (r.ok ? r.json() : Promise.reject()))
       .then(setBox)
-      .catch(() => setError("Kiste nicht gefunden"));
+      .catch(() => setErr("Kiste nicht gefunden"));
 
   useEffect(load, [id]);
 
-  /* ---------- Aktion ermitteln ---------- */
-  if (!box && !error) return <p className="p-4">Lade …</p>;
-  if (error)          return <p className="p-4 text-error">{error}</p>;
+  if (!box && !error) return <p className="p-6">Lade …</p>;
+  if (error) return <p className="p-6 text-error">{error}</p>;
 
+  /* ---- Aktion bestimmen ---------------------------------------------- */
   const action = !box.departed
-    ? { label:"Auslagern",   api:"load",    next:"Unterwegs",   css:"primary"  }
+    ? { label: "Auslagern", api: "load", css: "primary" }
     : box.departed && !box.returned
-    ? { label:"Zurücknehmen",api:"return",  next:"Rücklauf",    css:"accent"   }
+    ? { label: "Zurücknehmen", api: "return", css: "accent" }
     : box.returned && !box.is_checked
-    ? { label:"Prüfen",      api:"check",   next:"Geprüft",     css:"info"     }
-    : null; // bereits geprüft
+    ? { label: "Prüfen", api: "check", css: "info" }
+    : null;
 
   const doAction = async () => {
     if (!action) return;
-    const ok = confirm(`Kiste wirklich ${action.label.toLowerCase()}?`);
-    if (!ok) return;
-    await fetch(`/api/boxes/${id}/${action.api}`, { method:"PUT", headers:hdr });
-    load();                       // reload Detail
+    if (!confirm(`Kiste wirklich ${action.label.toLowerCase()}?`)) return;
+    await fetch(`/api/boxes/${id}/${action.api}`, { method: "PUT", headers: hdr });
+    load();
   };
 
   const delBox = async () => {
-    const ok = confirm("Kiste endgültig löschen – sicher?");
-    if (!ok) return;
-    await fetch(`/api/boxes/${id}`, { method:"DELETE", headers:hdr });
+    if (!confirm("Kiste endgültig löschen?")) return;
+    await fetch(`/api/boxes/${id}`, { method: "DELETE", headers: hdr });
     nav("/boxes");
   };
 
-  /* ---------- UI ---------- */
+  /* ---- UI ------------------------------------------------------------- */
   return (
-    <div className="p-4 max-w-xl mx-auto flex flex-col gap-4">
-      <h1 className="text-2xl font-bold flex items-center gap-3">
-        📦 {box.serial}
-        <span className="badge badge-outline">{box.type}</span>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">
+        {box.serial} &nbsp; <span className="opacity-60">{box.type}</span>
       </h1>
 
-      <table className="table border">
+      <table className="table w-auto">
         <tbody>
-          <tr><th>Status</th><td>{box.status}</td></tr>
-          <tr><th>Cycles</th><td>{box.cycles}</td></tr>
-          <tr><th>Device</th><td>{box.deviceSerial || "—"}</td></tr>
-          <tr><th>Departed</th><td>{box.departed ?? "—"}</td></tr>
-          <tr><th>Returned</th><td>{box.returned ?? "—"}</td></tr>
-          <tr><th>Checked</th><td>{box.is_checked ? "✅" : "—"}</td></tr>
+          <tr><td>Status</td><td>{box.status}</td></tr>
+          <tr><td>Cycles</td><td>{box.cycles}</td></tr>
+          <tr><td>Device</td><td>{box.deviceSerial || "—"}</td></tr>
+          <tr><td>Departed</td><td>{String(box.departed)}</td></tr>
+          <tr><td>Returned</td><td>{String(box.returned)}</td></tr>
+          <tr><td>Checked</td><td>{box.is_checked ? "✅" : "—"}</td></tr>
         </tbody>
       </table>
 
-      <div className="flex gap-2">
-        {action && (
-          <button onClick={doAction} className={`btn btn-${action.css}`}>
-            {action.label}
-          </button>
-        )}
+      {action && (
+        <button onClick={doAction} className={`btn btn-${action.css}`}>
+          {action.label}
+        </button>
+      )}
 
-        <Link to={`/boxes/${id}/history`} className="btn btn-outline">
-          History
-        </Link>
+      <Link to={`/box/${box.serial}/history`} className="btn">
+        History
+      </Link>
 
-        {role==="admin" && (
-          <button onClick={delBox} className="btn btn-error btn-outline ml-auto">
-            Löschen
-          </button>
-        )}
-      </div>
+      {role === "admin" && (
+        <button onClick={delBox} className="btn btn-error">
+          Löschen
+        </button>
+      )}
 
-      <Link to="/boxes" className="link mt-4">← Zurück zur Übersicht</Link>
+      <Link to="/boxes" className="link block mt-4">
+        ← Zurück zur Übersicht
+      </Link>
     </div>
   );
 }
