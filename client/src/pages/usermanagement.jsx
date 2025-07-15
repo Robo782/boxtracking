@@ -1,5 +1,3 @@
-/* Benutzer­verwaltung – komplett ohne axios / ohne Modul-Token */
-
 import { useEffect, useState } from "react";
 
 export default function UserManagement() {
@@ -9,13 +7,13 @@ export default function UserManagement() {
   const [role, setRole] = useState("user");
   const [err , setErr ] = useState("");
 
-  /* immer frische Header mit aktuellem Token */
+  /* Header immer frisch mit aktuellem Token */
   const hdr = () => ({
     "Content-Type": "application/json",
     Authorization : `Bearer ${localStorage.getItem("token")}`,
   });
 
-  /* ---------- Liste laden ---------- */
+  /* ---------- Liste ---------- */
   const load = () =>
     fetch("/api/admin/users", { headers: hdr() })
       .then(r => (r.ok ? r.json() : Promise.reject()))
@@ -26,25 +24,22 @@ export default function UserManagement() {
   /* ---------- anlegen ---------- */
   async function create(e) {
     e.preventDefault();
-    const body = JSON.stringify({
-      username: name,
-      password: pass || "changeme",
-      role,
-    });
-    const res = await fetch("/api/admin/users", {
+    await fetch("/api/admin/users", {
       method: "POST",
       headers: hdr(),
-      body,
+      body: JSON.stringify({
+        username: name,
+        password: pass || "changeme",
+        role,
+      }),
     });
-    if (!res.ok) return alert("Fehler beim Anlegen");
-    setName(""); setPass(""); setRole("user");
-    load();
+    setName(""); setPass(""); setRole("user"); load();
   }
 
   /* ---------- Aktionen ---------- */
   const resetPw = id =>
     confirm("PW auf 'changeme' setzen?") &&
-    fetch(`/api/admin/users/${id}/reset`, { method:"PUT", headers: hdr() });
+      fetch(`/api/admin/users/${id}/reset`, { method:"PUT", headers: hdr() });
 
   const toggleRole = (id, cur) =>
     fetch(`/api/admin/users/${id}`, {
@@ -55,8 +50,8 @@ export default function UserManagement() {
 
   const delUser = id =>
     confirm("User wirklich löschen?") &&
-    fetch(`/api/admin/users/${id}`, { method:"DELETE", headers: hdr() })
-      .then(load);
+      fetch(`/api/admin/users/${id}`, { method:"DELETE", headers: hdr() })
+        .then(load);
 
   /* ---------- UI ---------- */
   return (
@@ -66,27 +61,16 @@ export default function UserManagement() {
       <form onSubmit={create} className="card bg-base-100 p-4 max-w-md space-y-4">
         <h2 className="font-semibold">Neuer Benutzer</h2>
 
-        <input
-          className="input input-bordered w-full"
-          placeholder="Username"
-          value={name}
-          required
-          onChange={e => setName(e.target.value)}
-        />
+        <input className="input input-bordered w-full"
+               placeholder="Username" value={name}
+               onChange={e=>setName(e.target.value)} required />
 
-        <input
-          className="input input-bordered w-full"
-          placeholder="Passwort (optional)"
-          type="password"
-          value={pass}
-          onChange={e => setPass(e.target.value)}
-        />
+        <input className="input input-bordered w-full"
+               placeholder="Passwort (optional)" type="password"
+               value={pass} onChange={e=>setPass(e.target.value)} />
 
-        <select
-          className="select select-bordered w-full"
-          value={role}
-          onChange={e => setRole(e.target.value)}
-        >
+        <select className="select select-bordered w-full"
+                value={role} onChange={e=>setRole(e.target.value)}>
           <option value="user">user</option>
           <option value="admin">admin</option>
         </select>
@@ -97,24 +81,16 @@ export default function UserManagement() {
       {err && <p className="text-error">{err}</p>}
 
       <table className="table">
-        <thead>
-          <tr><th>User</th><th>Rolle</th><th>Aktionen</th></tr>
-        </thead>
+        <thead><tr><th>User</th><th>Rolle</th><th>Aktionen</th></tr></thead>
         <tbody>
           {list.map(u => (
             <tr key={u.id}>
               <td>{u.username}</td>
               <td>{u.role}</td>
               <td className="flex gap-2">
-                <button onClick={() => toggleRole(u.id, u.role)} className="btn btn-xs">
-                  Rolle ↺
-                </button>
-                <button onClick={() => resetPw(u.id)} className="btn btn-xs">
-                  PW-Reset
-                </button>
-                <button onClick={() => delUser(u.id)} className="btn btn-error btn-xs">
-                  ✕
-                </button>
+                <button onClick={()=>toggleRole(u.id,u.role)} className="btn btn-xs">Rolle ↺</button>
+                <button onClick={()=>resetPw(u.id)}        className="btn btn-xs">PW-Reset</button>
+                <button onClick={()=>delUser(u.id)}        className="btn btn-error btn-xs">✕</button>
               </td>
             </tr>
           ))}
