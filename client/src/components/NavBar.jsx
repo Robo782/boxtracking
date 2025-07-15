@@ -1,42 +1,37 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
-/* JWT-Payload kurz dekodieren */
-function parseJwt(token) {
+/* Hilfsfunktion: Rolle aus dem JWT lesen */
+function getRole() {
+  // 1) explizit gespeicherter Wert (falls Login.jsx das setzt)
+  const stored = localStorage.getItem("role");
+  if (stored) return stored;
+
+  // 2) sonst Token-Payload auslesen
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+
   try {
-    return JSON.parse(atob(token.split(".")[1]));
+    return JSON.parse(atob(token.split(".")[1])).role ?? null;
   } catch {
-    return {};
+    return null;
   }
 }
 
 export default function NavBar() {
-  /* 1) initial: Rolle aus LocalStorage oder direkt aus dem Token holen */
-  const [role, setRole] = useState(() => {
-    const saved = localStorage.getItem("role");
-    if (saved) return saved;
-
-    const token = localStorage.getItem("token");
-    return token ? parseJwt(token).role ?? null : null;
-  });
-
   const nav = useNavigate();
+  /* `useLocation()` sorgt dafür, dass die NavBar bei jedem Routenwechsel neu rendert */
+  useLocation();   // der Rückgabewert ist hier egal
 
-  /* 2) reagiert auf Änderungen aus anderen Tabs/Fenstern */
-  useEffect(() => {
-    const h = () => setRole(localStorage.getItem("role"));
-    window.addEventListener("storage", h);
-    return () => window.removeEventListener("storage", h);
-  }, []);
+  const role  = getRole();
+  const token = localStorage.getItem("token");
 
-  /* 3) Logout */
+  /* Wenn kein Token da ist (vor dem Login), gar keine Leiste anzeigen */
+  if (!token) return null;
+
   const logout = () => {
     localStorage.clear();
-    setRole(null);
     nav("/login", { replace: true });
   };
-
-  if (!role) return null; // Login-Seite → keine Leiste
 
   return (
     <div className="navbar bg-base-300 px-4 shadow">
