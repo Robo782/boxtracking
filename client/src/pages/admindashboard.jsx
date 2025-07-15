@@ -1,47 +1,45 @@
+/* client/src/pages/admindashboard.jsx */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function AdminDashboard() {
-  const token = localStorage.getItem("token");
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/admin/stats", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const token = localStorage.getItem("token");
+        const res = await fetch("/api/admin/stats",
+          { headers:{ Authorization:`Bearer ${token}` } });
         if (!res.ok) throw new Error();
         setStats(await res.json());
       } catch {
-        /* Fallback-Mock falls der Endpoint noch nicht existiert */
+        /* Fallback-Werte */
         setStats({
           boxes_total: "—",
-          boxes_onTour: "—",
-          boxes_pending: "—",
-          users: "—",
-          last_backup: "—",
+          boxes_onTour:"—",
+          boxes_pending:"—",
+          users:"—",
+          last_backup:"—",
         });
       }
     })();
   }, []);
 
-  if (!stats) return <div className="p-6">Lade …</div>;
+  if (!stats) return <p className="p-6">Lade …</p>;
 
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-2xl font-bold">Admin-Dashboard</h1>
 
-      {/* Stat-Kacheln */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label="Boxen gesamt"  val={stats.boxes_total}  />
+        <Stat label="Boxen gesamt"  val={stats.boxes_total} />
         <Stat label="Unterwegs"     val={stats.boxes_onTour} />
-        <Stat label="Ungeprüft"     val={stats.boxes_pending}/>
-        <Stat label="User"          val={stats.users}        />
+        <Stat label="Ungeprüft"     val={stats.boxes_pending} />
+        <Stat label="User"          val={stats.users} />
         <Stat label="Letztes Backup" val={stats.last_backup} wide />
       </div>
 
-      {/* Schnellzugriffe */}
       <div className="flex flex-wrap gap-4">
         <Link to="/boxmanage"      className="btn">Box-Pflege</Link>
         <Link to="/usermanagement" className="btn btn-primary">Benutzer</Link>
