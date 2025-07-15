@@ -1,59 +1,41 @@
-// client/src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login           from "@/pages/Login";
-import Boxes           from "@/pages/Boxes";
-import BoxDetail       from "@/pages/BoxDetail";
-import BoxHistory      from "@/pages/BoxHistory";
-import BoxesManage     from "@/pages/BoxesManage";
-import AdminDashboard  from "@/pages/AdminDashboard";
-import UserManagement  from "@/pages/UserManagement";
-import BackupRestore   from "@/pages/BackupRestore";
+import React, { lazy, Suspense } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import NavBar from "@/components/NavBar";
 
-const Protected = ({ allowed, children }) =>
-  allowed ? children : <Navigate to="/login" replace />;
+/* Seiten – lazy laden */
+const Login           = lazy(() => import("@/pages/login.jsx"));
+const Boxes           = lazy(() => import("@/pages/boxes.jsx"));
+const BoxDetail       = lazy(() => import("@/pages/boxdetail.jsx"));
+const BoxHistory      = lazy(() => import("@/pages/boxhistory.jsx"));
+const BoxesManage     = lazy(() => import("@/pages/boxesmanage.jsx"));
+const AdminDashboard  = lazy(() => import("@/pages/admindashboard.jsx"));
+const UserManagement  = lazy(() => import("@/pages/usermanagement.jsx"));
+const BackupRestore   = lazy(() => import("@/pages/backuprestore.jsx"));
 
 export default function App() {
-  const role = localStorage.getItem("role");         // "admin" | "user" | null
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
+      <NavBar />
 
-        {/* öffentlich nach Login */}
-        <Route
-          path="/boxes"
-          element={<Protected allowed={!!role}><Boxes /></Protected>}
-        />
-        <Route
-          path="/boxes/:id"
-          element={<Protected allowed={!!role}><BoxDetail /></Protected>}
-        />
-        <Route
-          path="/boxes/:id/history"
-          element={<Protected allowed={!!role}><BoxHistory /></Protected>}
-        />
+      <Suspense fallback={<div className="p-6">Lade …</div>}>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/"       element={<Boxes />} />
+          <Route path="/boxes"  element={<Boxes />} />
+          <Route path="/box/:id"        element={<BoxDetail />} />
+          <Route path="/box/:id/history" element={<BoxHistory />} />
 
-        {/* reine Admin-Routen */}
-        <Route
-          path="/admin"
-          element={<Protected allowed={role==="admin"}><AdminDashboard /></Protected>}
-        />
-        <Route
-          path="/admin/boxes"
-          element={<Protected allowed={role==="admin"}><BoxesManage /></Protected>}
-        />
-        <Route
-          path="/admin/users"
-          element={<Protected allowed={role==="admin"}><UserManagement /></Protected>}
-        />
-        <Route
-          path="/admin/backup"
-          element={<Protected allowed={role==="admin"}><BackupRestore /></Protected>}
-        />
+          {/* Admin */}
+          <Route path="/boxmanage"      element={<BoxesManage />} />
+          <Route path="/admin"          element={<AdminDashboard />} />
+          <Route path="/usermanagement" element={<UserManagement />} />
+          <Route path="/backuprestore"  element={<BackupRestore />} />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to={role ? "/boxes" : "/login"} replace />} />
-      </Routes>
+          {/* Fallback */}
+          <Route path="*" element={<Boxes />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
