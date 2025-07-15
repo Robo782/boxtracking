@@ -2,7 +2,7 @@ import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import NavBar from "@/components/NavBar";
 
-/* Seiten – lazy laden */
+/* Pages (lazy – Vite splittet Chunks) */
 const Login           = lazy(() => import("@/pages/login.jsx"));
 const Boxes           = lazy(() => import("@/pages/boxes.jsx"));
 const BoxDetail       = lazy(() => import("@/pages/boxdetail.jsx"));
@@ -17,6 +17,7 @@ export default function App() {
     <BrowserRouter>
       <NavBar />
 
+      {/* globaler Fallback – Loader, bis der Chunk da ist */}
       <Suspense fallback={<div className="p-6">Lade …</div>}>
         <Routes>
           {/* Public */}
