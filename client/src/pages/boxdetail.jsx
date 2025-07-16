@@ -1,28 +1,25 @@
-/* client/src/pages/boxdetail.jsx */
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { api } from "@/utils/api";
 
 export default function BoxDetail() {
-  const { id } = useParams();            // serial
+  const { id } = useParams();          // serial
   const nav    = useNavigate();
 
   const [box, setBox] = useState(null);
   const [err, setErr] = useState("");
 
-  /* ----- laden ----- */
-  const load = () => {
-    const token = localStorage.getItem("token");
-    fetch(`/api/boxes/${id}`, { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => (r.ok ? r.json() : Promise.reject("Kiste nicht gefunden")))
+  const load = () =>
+    api(`/api/boxes/${id}`)
+      .then(r => r.json())
       .then(setBox)
-      .catch(setErr);
-  };
+      .catch(() => setErr("Kiste nicht gefunden"));
+
   useEffect(load, [id]);
 
   if (!box && !err) return <p className="p-6">Lade …</p>;
   if (err)          return <p className="p-6 text-error">{err}</p>;
 
-  /* ----- Aktion ermitteln ----- */
   const action = !box.departed
     ? { label:"Auslagern", api:"load",    css:"primary" }
     : box.departed && !box.returned
@@ -34,22 +31,17 @@ export default function BoxDetail() {
   const doAction = async () => {
     if (!action) return;
     if (!confirm(`Kiste wirklich ${action.label.toLowerCase()}?`)) return;
-    const token = localStorage.getItem("token");
-    await fetch(`/api/boxes/${id}/${action.api}`,
-      { method:"PUT", headers:{ Authorization:`Bearer ${token}` } });
+    await api(`/api/boxes/${id}/${action.api}`, { method:"PUT" });
     load();
   };
 
   const role = localStorage.getItem("role");
   const delBox = async () => {
     if (!confirm("Kiste endgültig löschen?")) return;
-    const token = localStorage.getItem("token");
-    await fetch(`/api/boxes/${id}`,
-      { method:"DELETE", headers:{ Authorization:`Bearer ${token}` } });
+    await api(`/api/boxes/${id}`, { method:"DELETE" });
     nav("/boxes");
   };
 
-  /* ----- UI ----- */
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">{box.serial}</h1>
@@ -71,16 +63,11 @@ export default function BoxDetail() {
         </button>
       )}
 
-      <Link to={`/box/${box.serial}/history`} className="btn">
-        History
-      </Link>
+      <Link to={`/box/${box.serial}/history`} className="btn">History</Link>
 
       {role === "admin" && (
-        <button onClick={delBox} className="btn btn-error">
-          Löschen
-        </button>
+        <button onClick={delBox} className="btn btn-error">Löschen</button>
       )}
-
       <Link to="/boxes" className="link block mt-4">← Zurück</Link>
     </div>
   );

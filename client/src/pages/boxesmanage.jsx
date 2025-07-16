@@ -1,6 +1,6 @@
-/* client/src/pages/boxesmanage.jsx */
 import { useEffect, useState, useMemo } from "react";
 import StatusBadge from "@/components/StatusBadge";
+import { api } from "@/utils/api";
 
 export default function BoxesManage() {
   const [boxes, setBoxes] = useState([]);
@@ -8,21 +8,14 @@ export default function BoxesManage() {
   const [statF, setStatF] = useState("all");
   const [typeF, setTypeF] = useState("all");
 
-  /* ---- Daten holen ---- */
-  const load = () => {
-    const token = localStorage.getItem("token");
-    fetch("/api/boxes", { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r=>r.json()).then(setBoxes);
-  };
+  const load = () => api("/api/boxes").then(r=>r.json()).then(setBoxes);
   useEffect(load, []);
 
-  /* ---- Filter ---- */
   const list = useMemo(() => boxes.filter(b =>
     (statF==="all" || b.status===statF) &&
     (typeF==="all" || b.type  ===typeF)
   ), [boxes, statF, typeF]);
 
-  /* ---- Auswahl ---- */
   const toggle = id => {
     const s = new Set(sel);
     s.has(id) ? s.delete(id) : s.add(id);
@@ -30,29 +23,23 @@ export default function BoxesManage() {
   };
   const allSel = list.every(b=>sel.has(b.id));
 
-  /* ---- Bulk-Aktion ---- */
   async function bulk(action) {
     if (sel.size===0) return alert("Nichts ausgewählt");
-    const token = localStorage.getItem("token");
-    await fetch("/api/admin/boxes/bulk", {
+    await api("/api/admin/boxes/bulk", {
       method :"PUT",
-      headers:{ "Content-Type":"application/json",
-                Authorization:`Bearer ${token}` },
+      headers : { "Content-Type":"application/json" },
       body   : JSON.stringify({ ids:Array.from(sel), action }),
     });
     setSel(new Set());
     load();
   }
 
-  /* ---- UI ---- */
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">Box-Pflege</h1>
 
-      {/* Filterzeile */}
       <div className="flex flex-wrap gap-4 items-center">
-        <select className="select select-bordered"
-                value={statF} onChange={e=>setStatF(e.target.value)}>
+        <select className="select select-bordered" value={statF} onChange={e=>setStatF(e.target.value)}>
           <option value="all">Status: Alle</option>
           <option value="available">Verfügbar</option>
           <option value="onTour">Unterwegs</option>
@@ -60,8 +47,7 @@ export default function BoxesManage() {
           <option value="checked">Geprüft</option>
         </select>
 
-        <select className="select select-bordered"
-                value={typeF} onChange={e=>setTypeF(e.target.value)}>
+        <select className="select select-bordered" value={typeF} onChange={e=>setTypeF(e.target.value)}>
           <option value="all">Typ: Alle</option>
           <option value="PU-S">PU-S</option>
           <option value="PU-M">PU-M</option>
@@ -71,7 +57,6 @@ export default function BoxesManage() {
         <span>{sel.size} ausgewählt</span>
       </div>
 
-      {/* Aktionen */}
       <div className="flex flex-wrap gap-2">
         <button onClick={()=>bulk("load")}   className="btn btn-sm btn-primary">Auslagern</button>
         <button onClick={()=>bulk("return")} className="btn btn-sm btn-accent">Zurücknehmen</button>
@@ -79,7 +64,6 @@ export default function BoxesManage() {
         <button onClick={()=>bulk("reset")}  className="btn btn-sm">Status ↺</button>
       </div>
 
-      {/* Tabelle */}
       <table className="table">
         <thead>
           <tr>

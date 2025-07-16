@@ -1,29 +1,18 @@
-/* client/src/pages/admindashboard.jsx */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "@/utils/api";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await fetch("/api/admin/stats",
-          { headers:{ Authorization:`Bearer ${token}` } });
-        if (!res.ok) throw new Error();
-        setStats(await res.json());
-      } catch {
-        /* Fallback-Werte */
-        setStats({
-          boxes_total: "—",
-          boxes_onTour:"—",
-          boxes_pending:"—",
-          users:"—",
-          last_backup:"—",
-        });
-      }
-    })();
+    api("/api/admin/stats")
+      .then(r => r.json())
+      .then(setStats)
+      .catch(() => setStats({
+        boxes_total:"—", boxes_onTour:"—",
+        boxes_pending:"—", users:"—", last_backup:"—",
+      }));
   }, []);
 
   if (!stats) return <p className="p-6">Lade …</p>;

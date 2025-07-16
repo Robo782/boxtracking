@@ -1,7 +1,7 @@
-/* client/src/pages/boxes.jsx */
 import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import FilterBar from "../components/FilterBar";
+import { api } from "@/utils/api";
 
 export default function Boxes() {
   const [boxes, setBoxes] = useState([]);
@@ -10,16 +10,13 @@ export default function Boxes() {
   const [type , setType ] = useState("all");
   const [err  , setErr  ] = useState("");
 
-  /* ---- Daten holen ---- */
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch("/api/boxes", { headers:{ Authorization:`Bearer ${token}` } })
-      .then(r => (r.ok ? r.json() : Promise.reject("Kisten konnten nicht geladen werden")))
+    api("/api/boxes")
+      .then(r => r.json())
       .then(setBoxes)
-      .catch(setErr);
+      .catch(e => setErr(e.message));
   }, []);
 
-  /* ---- Filtern ---- */
   const list = useMemo(() => boxes.filter(b => {
     const q = query.toLowerCase();
     return  (stat==="all" || b.status===stat) &&
@@ -28,9 +25,8 @@ export default function Boxes() {
              (b.deviceSerial ?? "").toLowerCase().includes(q));
   }), [boxes, stat, type, query]);
 
-  const role = localStorage.getItem("role");   // immer aktuell
+  const role = localStorage.getItem("role");
 
-  /* ---- UI ---- */
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">
