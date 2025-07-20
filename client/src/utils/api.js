@@ -1,21 +1,32 @@
-/**
- * Zentraler Fetch-Wrapper mit Auto-Logout bei 401/403.
- * Verwende in allen Pages statt fetch(): api(url, opts)
- */
-export async function api(url, opts = {}) {
+// zentraler Fetch-Wrapper – immer JWT mitsenden & JSON automatisch parsen
+export async function api(
+  url,
+  { method = "GET", headers = {}, body, ...rest } = {}
+) {
   const token = localStorage.getItem("token");
-  const headers = {
-    ...(opts.headers || {}),
-    Authorization: `Bearer ${token}`,
+  const hdrs  = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(body   ? { "Content-Type": "application/json" } : {}),
+    ...headers,
   };
 
-  const res = await fetch(url, { ...opts, headers });
+  const res = await fetch(url, { method, headers: hdrs, body, ...rest });
 
-  if (res.status === 401 || res.status === 403) {
-    // Session invalid → alles löschen & zum Login
-    localStorage.clear();
-    window.location.href = "/login";
-    throw new Error("Session expired");
-  }
-  return res;
+  // 204 (No Content) = OK aber ohne Payload
+  if (res.status === 204) return null;
+
+  // Lies die Antwort (text oder json – je nach Header)
+  const data = res.headers
+    .get("content-type")?.includes("application/json")
+      ? await res.json()
+      : await res.text();
+
+  if (!res.ok) throw new Error(data?.message || res.statusText);
+  return data;
 }
+
+// kleine Komfort-Helfer
+export const apiGet    = (u)           => api(u);
+export const apiPost   = (u, b)        => api(u, { method: "POST", body: JSON.stringify(b) });
+export const apiPut    = (u, b)        => api(u, { method: "PUT",  body: JSON.stringify(b) });
+export const apiDelete = (u)           => api(u, { method: "DELETE" });
