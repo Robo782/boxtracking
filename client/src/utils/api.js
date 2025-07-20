@@ -1,25 +1,25 @@
-const base  = import.meta.env.VITE_API ?? "/api";
-const token = () => localStorage.getItem("token") ?? "";
-
-const hdr = (h = {}) => ({
-  "Content-Type": "application/json",
-  Authorization  : `Bearer ${token()}`,
-  ...h,
-});
-
-const json = r => r.ok ? r.json() : Promise.reject(new Error(r.status));
+// utils/api.js   (vollständige Datei)
+function request(path, opts) {
+  const token = localStorage.getItem("token");
+  return fetch(`/api${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...opts?.headers,
+    },
+    ...opts,
+  }).then(async r => {
+    if (!r.ok) {
+      const msg = await r.text().catch(() => r.statusText);
+      throw new Error(`${r.status} ${msg}`);
+    }
+    return r.status === 204 ? null : r.json();
+  });
+}
 
 export default {
-  get : (u,o={}) => fetch(base+u,{...o,headers:hdr(o.headers)}).then(json),
-
-  post: (u,b,o={}) => fetch(base+u,{
-           method:"POST",
-           body:o.file?b:JSON.stringify(b),
-           headers:o.file?o.headers:hdr(o.headers),
-         }).then(json),
-
-  del : (u,o={}) => fetch(base+u,{
-           method:"DELETE",
-           headers:hdr(o.headers),
-         }).then(json),
+  get:  (path)            => request(path),
+  post: (path, data)      => request(path, { method: "POST", body: JSON.stringify(data) }),
+  put:  (path, data)      => request(path, { method: "PUT",  body: JSON.stringify(data) }),
+  del:  (path)            => request(path, { method: "DELETE" }),
 };

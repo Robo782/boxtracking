@@ -8,16 +8,15 @@ export default function Login() {
   const [pass,setPass] = useState("");
   const [err ,setErr ] = useState("");
 
-  const submit = e => {
-    e.preventDefault();
-    api.post("/auth/login",{user,pass})
-       .then(({token,role})=>{
-         localStorage.setItem("token",token);
-         localStorage.setItem("role" ,role );
-         nav("/");
-       })
-       .catch(()=>setErr("Login fehlgeschlagen"));
-  };
+  const onSubmit = e => {
+  e.preventDefault();
+  api.post("/auth/login", { username, password })
+     .then(({ token }) => {
+       localStorage.setItem("token", token);
+       navigate("/dashboard");
+     })
+     .catch(() => setErr("Login fehlgeschlagen"));
+};
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-8">
