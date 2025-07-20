@@ -6,16 +6,23 @@ import path             from "path";
 export default defineConfig({
   plugins: [react()],
 
-  /* 🔑  Alias, damit "@/…" auf src/ zeigt */
+  /* 🔑 Alias zwingt alle Imports auf dieselbe Kopie */
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      react:      path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
     },
   },
 
-  /* Build-Einstellungen */
+  /* Rollup/Vite darf React NIE doppelt packen */
+  optimizeDeps: {
+    include: ["react", "react-dom"],
+    dedupe:  ["react", "react-dom"],
+  },
+
   build: {
-    outDir: "dist",     // wie zuvor
-    sourcemap: true,    // 👉  Prod-Source-Map einschalten!
+    outDir: "dist",
+    sourcemap: true,        // bleibt an, damit du notfalls wieder debuggen kannst
   },
 });
