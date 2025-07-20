@@ -1,45 +1,24 @@
-// client/src/components/FilterBar.jsx
-export default function FilterBar({
-  status, setStatus,
-  type,   setType,
-  query,  setQuery
-}) {
+export default function FilterBar({ query,setQuery, stat,setStat, type,setType })
+{
   return (
-    <div className="flex flex-wrap gap-2 items-center">
-      {/* Status-DropDown */}
-      <select
-        className="select select-sm select-bordered"
-        value={status}
-        onChange={e=>setStatus(e.target.value)}
-      >
+    <div className="flex flex-wrap gap-2">
+      <select value={stat} onChange={e=>setStat(e.target.value)} className="select select-bordered">
         <option value="all">Alle Status</option>
-        <option value="Verfügbar">Verfügbar</option>
-        <option value="Unterwegs">Unterwegs</option>
-        <option value="Rücklauf">Rücklauf</option>
+        <option value="free">frei</option>
+        <option value="in-use">in Benutzung</option>
+        <option value="defect">defekt</option>
       </select>
 
-      {/* Typ-DropDown */}
-      <select
-        className="select select-sm select-bordered"
-        value={type}
-        onChange={e=>setType(e.target.value)}
-      >
+      <select value={type} onChange={e=>setType(e.target.value)} className="select select-bordered">
         <option value="all">Alle Typen</option>
-        <option value="PU-S">PU-S</option>
-        <option value="PU-M">PU-M</option>
-        <option value="PR-M">PR-M</option>
+        <option value="PU">PU</option>
+        <option value="HT">HT</option>
+        <option value="EU">EU</option>
       </select>
 
-      {/* Textsuche */}
-      <label className="input input-sm input-bordered flex-1 max-w-xs">
-        <input
-          type="text"
-          placeholder="PCC-ID / Device-Serial"
-          className="grow"
-          value={query}
-          onChange={e=>setQuery(e.target.value.trim().toLowerCase())}
-        />
-      </label>
+      <input value={query} onChange={e=>setQuery(e.target.value)}
+             placeholder="PCC-ID / Device-Serial"
+             className="input input-bordered flex-1 min-w-[10rem]" />
     </div>
   );
 }

@@ -1,21 +1,25 @@
-/**
- * Zentraler Fetch-Wrapper mit Auto-Logout bei 401/403.
- * Verwende in allen Pages statt fetch(): api(url, opts)
- */
-export async function api(url, opts = {}) {
-  const token = localStorage.getItem("token");
-  const headers = {
-    ...(opts.headers || {}),
-    Authorization: `Bearer ${token}`,
-  };
+const base  = import.meta.env.VITE_API ?? "/api";
+const token = () => localStorage.getItem("token") ?? "";
 
-  const res = await fetch(url, { ...opts, headers });
+const hdr = (h = {}) => ({
+  "Content-Type": "application/json",
+  Authorization  : `Bearer ${token()}`,
+  ...h,
+});
 
-  if (res.status === 401 || res.status === 403) {
-    // Session invalid → alles löschen & zum Login
-    localStorage.clear();
-    window.location.href = "/login";
-    throw new Error("Session expired");
-  }
-  return res;
-}
+const json = r => r.ok ? r.json() : Promise.reject(new Error(r.status));
+
+export default {
+  get : (u,o={}) => fetch(base+u,{...o,headers:hdr(o.headers)}).then(json),
+
+  post: (u,b,o={}) => fetch(base+u,{
+           method:"POST",
+           body:o.file?b:JSON.stringify(b),
+           headers:o.file?o.headers:hdr(o.headers),
+         }).then(json),
+
+  del : (u,o={}) => fetch(base+u,{
+           method:"DELETE",
+           headers:hdr(o.headers),
+         }).then(json),
+};
