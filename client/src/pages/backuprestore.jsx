@@ -1,48 +1,65 @@
-import { useState } from "react";
-import { apiGet, apiPost } from "@/utils/api";
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../utils/api.js";
 
 export default function BackupRestore() {
-  const [err, setErr] = useState("");
+  const fileRef = useRef();
+  const [busy, setBusy] = useState(false);
+  const nav = useNavigate();
 
-  const download = () =>
-    apiGet("/api/admin/backup")
-      .then(blob => {
-        const a = document.createElement("a");
-        a.href  = URL.createObjectURL(
-          new Blob([JSON.stringify(blob)], {type: "application/json"})
-        );
-        a.download = `backup-${Date.now()}.json`;
-        a.click();
-      })
-      .catch(e => setErr(e.message));
-
-  const upload = async e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const text = await file.text();
+  async function download() {
+    setBusy(true);
     try {
-      await apiPost("/api/admin/restore", JSON.parse(text));
-      alert("Backup eingespielt – bitte neu einloggen.");
-      localStorage.clear();
-      location.replace("/login");
-    } catch (e) {
-      setErr(e.message);
+      const res = await api("/api/admin/backup");
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url;
+      a.download = "boxtracker-backup.sqlite";
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(false);
     }
-  };
+  }
+
+  async function restore(e) {
+    e.preventDefault();
+    const file = fileRef.current.files[0];
+    if (!file) return alert("Bitte Datei wählen.");
+    if (!confirm("Bestehende Datenbank überschreiben?")) return;
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append("dump", file);
+      await api("/api/admin/backup", { method:"PUT", body:form });
+      alert("Backup eingespielt – bitte neu anmelden.");
+      localStorage.clear();
+      nav("/login", { replace:true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const resetDb = () =>
+    confirm("ALLE Daten löschen?") &&
+      api("/api/admin/reset", { method:"POST" })
+        .then(()=>{ alert("Datenbank zurückgesetzt"); nav("/boxes"); });
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Backup & Restore</h1>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">Backup / Restore</h1>
 
-      <button onClick={download} className="btn btn-primary">Backup herunterladen</button>
+      <button onClick={download} className="btn btn-primary" disabled={busy}>
+        {busy ? "Bitte warten …" : "Backup herunterladen"}
+      </button>
 
-      <label className="btn">
-        Backup auswählen
-        <input type="file" accept=".json" hidden onChange={upload}/>
-      </label>
+      <form onSubmit={restore} className="flex gap-4 items-center flex-wrap">
+        <input type="file" ref={fileRef} className="file-input file-input-bordered" />
+        <button className="btn" disabled={busy}>Wiederherstellen</button>
+      </form>
 
-      {err && <p className="text-error">{err}</p>}
+      <button onClick={resetDb} className="btn btn-error">Datenbank RESET</button>
     </div>
   );
 }
