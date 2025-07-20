@@ -6,15 +6,16 @@ import path             from "path";
 export default defineConfig({
   plugins: [react()],
 
-  /*  🔑 Alias, damit "@/…" auf src/ zeigt  */
+  /* 🔑  Alias, damit "@/…" auf src/ zeigt */
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
 
-  /*  Baue nach client/dist  */
+  /* Build-Einstellungen */
   build: {
-    outDir: "dist",
+    outDir: "dist",     // wie zuvor
+    sourcemap: true,    // 👉  Prod-Source-Map einschalten!
   },
 });
