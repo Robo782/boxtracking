@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "@/utils/api";
+import { api } from "../utils/api.js";
 
 export default function BackupRestore() {
-  const fileRef   = useRef();
+  const fileRef = useRef();
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
 
@@ -13,37 +13,38 @@ export default function BackupRestore() {
       const res = await api("/api/admin/backup");
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
-      Object.assign(document.createElement("a"), {
-        href:url, download:"boxtracker-backup.sqlite",
-      }).click();
+      const a    = document.createElement("a");
+      a.href = url;
+      a.download = "boxtracker-backup.sqlite";
+      a.click();
       URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Backup fehlgeschlagen");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function restore(e) {
     e.preventDefault();
     const file = fileRef.current.files[0];
-    if (!file) return alert("Bitte Datei wählen");
-    if (!confirm("Bestehende DB wird überschrieben – fortfahren?")) return;
-
+    if (!file) return alert("Bitte Datei wählen.");
+    if (!confirm("Bestehende Datenbank überschreiben?")) return;
     setBusy(true);
-    const form = new FormData(); form.append("dump", file);
     try {
+      const form = new FormData();
+      form.append("dump", file);
       await api("/api/admin/backup", { method:"PUT", body:form });
-      alert("Backup eingespielt – bitte neu anmelden");
+      alert("Backup eingespielt – bitte neu anmelden.");
       localStorage.clear();
       nav("/login", { replace:true });
-    } catch {
-      alert("Restore fehlgeschlagen");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   const resetDb = () =>
     confirm("ALLE Daten löschen?") &&
-    api("/api/admin/reset", { method:"POST" })
-      .then(()=>{ alert("Datenbank zurückgesetzt"); nav("/boxes"); });
+      api("/api/admin/reset", { method:"POST" })
+        .then(()=>{ alert("Datenbank zurückgesetzt"); nav("/boxes"); });
 
   return (
     <div className="p-6 space-y-6">

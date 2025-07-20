@@ -1,23 +1,21 @@
-import React, { lazy, Suspense } from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import NavBar from "@/components/NavBar";
+import NavBar from "./components/NavBar.jsx";
 
-/* Pages (lazy – Vite splittet Chunks) */
-const Login           = lazy(() => import("@/pages/login.jsx"));
-const Boxes           = lazy(() => import("@/pages/boxes.jsx"));
-const BoxDetail       = lazy(() => import("@/pages/boxdetail.jsx"));
-const BoxHistory      = lazy(() => import("@/pages/boxhistory.jsx"));
-const BoxesManage     = lazy(() => import("@/pages/boxesmanage.jsx"));
-const AdminDashboard  = lazy(() => import("@/pages/admindashboard.jsx"));
-const UserManagement  = lazy(() => import("@/pages/usermanagement.jsx"));
-const BackupRestore   = lazy(() => import("@/pages/backuprestore.jsx"));
+/* Lazy-loaded Pages (alle relativen Pfade, da kein Vite-@-Alias configured) */
+const Boxes          = lazy(() => import("./pages/boxes.jsx"));
+const Login          = lazy(() => import("./pages/login.jsx"));
+const BoxDetail      = lazy(() => import("./pages/boxdetail.jsx"));
+const BoxHistory     = lazy(() => import("./pages/boxhistory.jsx"));
+const BoxesManage    = lazy(() => import("./pages/boxesmanage.jsx"));
+const AdminDashboard = lazy(() => import("./pages/admindashboard.jsx"));
+const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
+const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 
 export default function App() {
   return (
     <BrowserRouter>
       <NavBar />
-
-      {/* globaler Fallback – Loader, bis der Chunk da ist */}
       <Suspense fallback={<div className="p-6">Lade …</div>}>
         <Routes>
           {/* Public */}
@@ -30,7 +28,7 @@ export default function App() {
           {/* Admin */}
           <Route path="/boxmanage"      element={<BoxesManage />} />
           <Route path="/admin"          element={<AdminDashboard />} />
-          <Route path="/usermanagement" element={<UserManagement />} />
+          <Route path="/usermanagement" element={<UserMgmt />} />
           <Route path="/backuprestore"  element={<BackupRestore />} />
 
           {/* Fallback */}

@@ -1,41 +1,38 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { api } from "@/utils/api";
+import { api } from "../utils/api.js";
 
 export default function BoxDetail() {
-  const { id } = useParams();          // serial
+  const { id } = useParams();  // serial
   const nav    = useNavigate();
-
   const [box, setBox] = useState(null);
   const [err, setErr] = useState("");
 
   const load = () =>
     api(`/api/boxes/${id}`)
-      .then(r => r.json())
+      .then(r=>r.json())
       .then(setBox)
-      .catch(() => setErr("Kiste nicht gefunden"));
-
+      .catch(()=>setErr("Kiste nicht gefunden"));
   useEffect(load, [id]);
 
-  if (!box && !err) return <p className="p-6">Lade …</p>;
-  if (err)          return <p className="p-6 text-error">{err}</p>;
+  if (!box && !err) return <div className="p-6">Lade …</div>;
+  if (err)          return <div className="p-6 text-error">{err}</div>;
 
-  const action = !box.departed
-    ? { label:"Auslagern", api:"load",    css:"primary" }
-    : box.departed && !box.returned
-    ? { label:"Zurücknehmen", api:"return", css:"accent" }
-    : box.returned && !box.is_checked
-    ? { label:"Prüfen", api:"check",     css:"info" }
-    : null;
+  const role = localStorage.getItem("role");
+
+  const action =
+    !box.departed ? {label:"Auslagern", api:"load", css:"primary"} :
+    box.departed && !box.returned ? {label:"Zurücknehmen", api:"return", css:"accent"} :
+    box.returned && !box.is_checked ? {label:"Prüfen", api:"check", css:"info"} :
+    null;
 
   const doAction = async () => {
     if (!action) return;
-    if (!confirm(`Kiste wirklich ${action.label.toLowerCase()}?`)) return;
+    if (!confirm(`${action.label}?`)) return;
     await api(`/api/boxes/${id}/${action.api}`, { method:"PUT" });
     load();
   };
 
-  const role = localStorage.getItem("role");
   const delBox = async () => {
     if (!confirm("Kiste endgültig löschen?")) return;
     await api(`/api/boxes/${id}`, { method:"DELETE" });
@@ -68,6 +65,7 @@ export default function BoxDetail() {
       {role === "admin" && (
         <button onClick={delBox} className="btn btn-error">Löschen</button>
       )}
+
       <Link to="/boxes" className="link block mt-4">← Zurück</Link>
     </div>
   );

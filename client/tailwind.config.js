@@ -2,9 +2,9 @@
 module.exports = {
   content: [
     "./index.html",
-    "./src/**/*.{js,jsx}",   // alle React-Dateien
+    "./src/**/*.{js,jsx}",
   ],
   theme: { extend: {} },
   plugins: [require("daisyui")],
-  daisyui: { themes: ["light"] },
+  daisyui: { themes: ["light", "dark"] }, // du kannst hier anpassen
 };

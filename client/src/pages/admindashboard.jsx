@@ -1,32 +1,35 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "@/utils/api";
+import { api } from "../utils/api.js";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
     api("/api/admin/stats")
-      .then(r => r.json())
+      .then(r=>r.json())
       .then(setStats)
-      .catch(() => setStats({
-        boxes_total:"—", boxes_onTour:"—",
-        boxes_pending:"—", users:"—", last_backup:"—",
+      .catch(()=>setStats({
+        boxes_total:"—",
+        boxes_onTour:"—",
+        boxes_pending:"—",
+        users:"—",
+        last_backup:"—",
       }));
   }, []);
 
-  if (!stats) return <p className="p-6">Lade …</p>;
+  if (!stats) return <div className="p-6">Lade …</div>;
 
   return (
     <div className="p-6 space-y-8">
       <h1 className="text-2xl font-bold">Admin-Dashboard</h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label="Boxen gesamt"  val={stats.boxes_total} />
-        <Stat label="Unterwegs"     val={stats.boxes_onTour} />
-        <Stat label="Ungeprüft"     val={stats.boxes_pending} />
-        <Stat label="User"          val={stats.users} />
-        <Stat label="Letztes Backup" val={stats.last_backup} wide />
+        <Stat label="Boxen gesamt"    val={stats.boxes_total} />
+        <Stat label="Unterwegs"       val={stats.boxes_onTour} />
+        <Stat label="Ungeprüft"       val={stats.boxes_pending} />
+        <Stat label="User"            val={stats.users} />
+        <Stat label="Letztes Backup"  val={stats.last_backup} wide />
       </div>
 
       <div className="flex flex-wrap gap-4">
