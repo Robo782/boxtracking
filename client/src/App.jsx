@@ -1,9 +1,8 @@
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import NavBar from "./components/NavBar.jsx";
 import { getAuth } from "./utils/auth.js";
 
-// lazy-geladene Seiten
+const NavBar         = lazy(() => import("./components/NavBar.jsx"));
 const Boxes          = lazy(() => import("./pages/boxes.jsx"));
 const Login          = lazy(() => import("./pages/login.jsx"));
 const BoxDetail      = lazy(() => import("./pages/boxdetail.jsx"));
@@ -15,27 +14,28 @@ const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 
 export default function App() {
   const { role, valid } = getAuth();
-  const authed = valid && role;   // true = eingeloggt & Token gültig
+  const authed = valid && role;            // ✅ eingeloggt & Token nicht abgelaufen
 
   return (
     <BrowserRouter>
-      <NavBar />
+      {/* NavBar nur, wenn eingeloggt */}
+      {authed && <NavBar />}
 
       <Suspense fallback={<p className="p-4">Lade …</p>}>
         <Routes>
-          {/* ───────── Root-Pfad ───────── */}
+          {/* Root → je nach Status */}
           <Route
             path="/"
             element={<Navigate to={authed ? "/boxes" : "/login"} replace />}
           />
 
-          {/* ───────── Login immer erreichbar ───────── */}
+          {/* Login */}
           <Route
             path="/login"
             element={authed ? <Navigate to="/boxes" replace /> : <Login />}
           />
 
-          {/* ───────── Geschützte Routen ───────── */}
+          {/* Geschützte Routen */}
           {authed && (
             <>
               <Route path="/boxes" element={<Boxes />} />
@@ -53,7 +53,7 @@ export default function App() {
             </>
           )}
 
-          {/* ───────── Fallback ───────── */}
+          {/* Fallback */}
           <Route
             path="*"
             element={<Navigate to={authed ? "/boxes" : "/login"} replace />}

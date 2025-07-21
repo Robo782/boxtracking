@@ -3,30 +3,33 @@ import { useEffect, useState } from "react";
 import { getAuth } from "../utils/auth.js";
 
 export default function NavBar() {
-  const loc      = useLocation();
-  const nav      = useNavigate();
-  const [role, setRole] = useState(() => getAuth().role);
+  const nav = useNavigate();
+  const loc = useLocation();
 
-  /* Rolle aktualisieren, wenn in anderem Tab ausgeloggt wurde */
+  // aktueller Auth-Status
+  const [auth, setAuth] = useState(getAuth());
+
+  /* Änderungen an Route → Auth nochmal prüfen */
+  useEffect(() => { setAuth(getAuth()); }, [loc.pathname]);
+
+  /* Token kann in anderem Tab gelöscht werden → storage-Event auffangen */
   useEffect(() => {
-    const fn = () => setRole(getAuth().role);
-    window.addEventListener("storage", fn);
-    return () => window.removeEventListener("storage", fn);
+    const onStorage = () => setAuth(getAuth());
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  /* Nach jedem Route-Wechsel Rolle frisch lesen (relevant nach Login) */
-  useEffect(() => { setRole(getAuth().role); }, [loc.pathname]);
+  /* Wenn Token ungültig oder weg → gar keine NavBar */
+  if (!auth.valid) return null;
+
+  const { role } = auth;
 
   const logout = () => {
-  localStorage.removeItem("token");   //  ⬅️  wichtig!
-  // optional: alte Keys aus Vorgängerversionen entsorgen
-  localStorage.removeItem("role");
-  setRole(null);
-  nav("/login", { replace: true });
-};
-
-
-  if (!role) return null;           // nicht eingeloggt → keine NavBar
+    localStorage.removeItem("token");      // einzig relevante Key
+    localStorage.removeItem("role");       // Altlast aus früherer Version
+    setAuth({ role: null, valid: false }); // NavBar sofort verstecken
+    nav("/login", { replace: true });
+  };
 
   const linkCls = (p) =>
     `px-2 underline-offset-4 hover:underline ${
