@@ -23,11 +23,12 @@ export default function NavBar() {
   const { role } = auth;
 
   const logout = () => {
-    localStorage.removeItem("token");
-    setAuth({ role: null, valid: false });
-    nav("/login", { replace: true });
-  };
+  localStorage.removeItem("token");
+  /*  👇 App neu informieren */
+  window.dispatchEvent(new Event("authchange"));
 
+  nav("/login", { replace: true });
+};
   const linkCls = (p) =>
     `px-2 underline-offset-4 hover:underline ${
       loc.pathname.startsWith(p) ? "font-bold underline" : ""

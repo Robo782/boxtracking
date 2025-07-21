@@ -1,8 +1,7 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getAuth } from "./utils/auth.js";
 
-// lazy Pages
 const NavBar         = lazy(() => import("./components/NavBar.jsx"));
 const Boxes          = lazy(() => import("./pages/boxes.jsx"));
 const Login          = lazy(() => import("./pages/login.jsx"));
@@ -14,7 +13,23 @@ const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
 const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 
 export default function App() {
-  const { role, valid } = getAuth();
+  /* ---------- zentrale Auth-Quelle ---------- */
+  const [auth, setAuth] = useState(getAuth());
+
+  /* reagiert auf:
+     • authchange (eigenes Event aus Login / Logout)
+     • storage-Events (anderer Tab)                        */
+  useEffect(() => {
+    const sync = () => setAuth(getAuth());
+    window.addEventListener("authchange", sync);
+    window.addEventListener("storage",     sync);
+    return () => {
+      window.removeEventListener("authchange", sync);
+      window.removeEventListener("storage",     sync);
+    };
+  }, []);
+
+  const { role, valid } = auth;
   const authed = valid && role;
 
   return (

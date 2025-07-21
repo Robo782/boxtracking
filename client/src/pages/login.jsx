@@ -9,20 +9,23 @@ export default function Login() {
   const [err,      setErr]      = useState("");
 
   const onSubmit = (e) => {
-    e.preventDefault();
-    setErr("");
+  e.preventDefault();
+  setErr("");
 
-    api
-      .post("/auth/login", { username, password })   // <-- Server erwartet genau das
-      .then((data) => {
-        const { token } = data;
-        if (!token) throw new Error("kein Token zurück-bekommen");
+  api
+    .post("/auth/login", { username, password })
+    .then((data) => {
+      const { token } = data;
+      if (!token) throw new Error("kein Token");
 
-        localStorage.setItem("token", token);
-        nav("/boxes", { replace: true });            // immer zuerst in die Übersicht
-      })
-      .catch(() => setErr("Login fehlgeschlagen"));
-  };
+      localStorage.setItem("token", token);
+      /*  👇 App neu informieren */
+      window.dispatchEvent(new Event("authchange"));
+
+      nav("/boxes", { replace: true });
+    })
+    .catch(() => setErr("Login fehlgeschlagen"));
+};
 
   return (
     <main className="flex flex-col items-center justify-center h-screen">
