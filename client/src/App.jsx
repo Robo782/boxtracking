@@ -1,8 +1,9 @@
 import React, { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import NavBar from "./components/NavBar.jsx";
+import { getAuth } from "./utils/auth.js";
 
-/* Lazy-loaded Pages (alle relativen Pfade, da kein Vite-@-Alias configured) */
+// lazy-geladene Seiten
 const Boxes          = lazy(() => import("./pages/boxes.jsx"));
 const Login          = lazy(() => import("./pages/login.jsx"));
 const BoxDetail      = lazy(() => import("./pages/boxdetail.jsx"));
@@ -13,26 +14,50 @@ const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
 const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 
 export default function App() {
+  const { role, valid } = getAuth();
+  const authed = valid && role;           // true = eingeloggt & Token nicht abgelaufen
+
   return (
     <BrowserRouter>
       <NavBar />
-      <Suspense fallback={<div className="p-6">Lade …</div>}>
+
+      <Suspense fallback={<p className="p-4">Lade …</p>}>
         <Routes>
-          {/* Public */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/"       element={<Boxes />} />
-          <Route path="/boxes"  element={<Boxes />} />
-          <Route path="/box/:id"        element={<BoxDetail />} />
-          <Route path="/box/:id/history" element={<BoxHistory />} />
+          {/* ───────── Login immer erreichbar ───────── */}
+          <Route
+            path="/login"
+            element={
+              authed ? (
+                <Navigate
+                  to={role === "admin" ? "/dashboard" : "/boxes"}
+                  replace
+                />
+              ) : (
+                <Login />
+              )
+            }
+          />
 
-          {/* Admin */}
-          <Route path="/boxmanage"      element={<BoxesManage />} />
-          <Route path="/admin"          element={<AdminDashboard />} />
-          <Route path="/usermanagement" element={<UserMgmt />} />
-          <Route path="/backuprestore"  element={<BackupRestore />} />
+          {/* ───────── Geschützte Routen ───────── */}
+          {authed && (
+            <>
+              <Route path="/boxes" element={<Boxes />} />
+              <Route path="/boxes/:id" element={<BoxDetail />} />
+              <Route path="/boxes/:id/history" element={<BoxHistory />} />
+              <Route path="/boxesmanage" element={<BoxesManage />} />
 
-          {/* Fallback */}
-          <Route path="*" element={<Boxes />} />
+              {role === "admin" && (
+                <>
+                  <Route path="/dashboard"       element={<AdminDashboard />} />
+                  <Route path="/usermanagement" element={<UserMgmt />} />
+                  <Route path="/backuprestore"  element={<BackupRestore />} />
+                </>
+              )}
+            </>
+          )}
+
+          {/* ───────── Fallback: alles nach /login ───────── */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
