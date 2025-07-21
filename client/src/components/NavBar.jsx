@@ -6,28 +6,25 @@ export default function NavBar() {
   const nav = useNavigate();
   const loc = useLocation();
 
-  // aktueller Auth-Status
   const [auth, setAuth] = useState(getAuth());
 
-  /* Änderungen an Route → Auth nochmal prüfen */
+  /* Bei Routenwechsel Auth neu prüfen */
   useEffect(() => { setAuth(getAuth()); }, [loc.pathname]);
 
-  /* Token kann in anderem Tab gelöscht werden → storage-Event auffangen */
+  /* Token kann in anderem Tab gelöscht werden */
   useEffect(() => {
-    const onStorage = () => setAuth(getAuth());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const fn = () => setAuth(getAuth());
+    window.addEventListener("storage", fn);
+    return () => window.removeEventListener("storage", fn);
   }, []);
 
-  /* Wenn Token ungültig oder weg → gar keine NavBar */
-  if (!auth.valid) return null;
+  if (!auth.valid) return null;          // ohne JWT keinerlei NavBar
 
   const { role } = auth;
 
   const logout = () => {
-    localStorage.removeItem("token");   // löscht auch evtl. "undefined"
-    localStorage.removeItem("role");       // Altlast aus früherer Version
-    setAuth({ role: null, valid: false }); // NavBar sofort verstecken
+    localStorage.removeItem("token");
+    setAuth({ role: null, valid: false });
     nav("/login", { replace: true });
   };
 

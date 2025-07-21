@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../utils/api.js";
+import api from "@/utils/api";            // dein Fetch-Wrapper
 
 export default function Login() {
   const nav = useNavigate();
-
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err,      setErr]      = useState("");
@@ -14,13 +13,13 @@ export default function Login() {
     setErr("");
 
     api
-      .post("/auth/login", { username, password })
-      .then((res) => {
-        const { token } = res.data;       // ✅ richtig aus dem Axios-Body holen
-        if (!token) throw new Error("kein Token");
+      .post("/auth/login", { username, password })   // <-- Server erwartet genau das
+      .then((data) => {
+        const { token } = data;
+        if (!token) throw new Error("kein Token zurück-bekommen");
 
         localStorage.setItem("token", token);
-        nav("/boxes", { replace: true }); // immer Boxen-Übersicht
+        nav("/boxes", { replace: true });            // immer zuerst in die Übersicht
       })
       .catch(() => setErr("Login fehlgeschlagen"));
   };

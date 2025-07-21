@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getAuth } from "./utils/auth.js";
 
+// lazy Pages
 const NavBar         = lazy(() => import("./components/NavBar.jsx"));
 const Boxes          = lazy(() => import("./pages/boxes.jsx"));
 const Login          = lazy(() => import("./pages/login.jsx"));
@@ -14,16 +15,15 @@ const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 
 export default function App() {
   const { role, valid } = getAuth();
-  const authed = valid && role;            // ✅ eingeloggt & Token nicht abgelaufen
+  const authed = valid && role;
 
   return (
     <BrowserRouter>
-      {/* NavBar nur, wenn eingeloggt */}
       {authed && <NavBar />}
 
       <Suspense fallback={<p className="p-4">Lade …</p>}>
         <Routes>
-          {/* Root → je nach Status */}
+          {/* Root */}
           <Route
             path="/"
             element={<Navigate to={authed ? "/boxes" : "/login"} replace />}
