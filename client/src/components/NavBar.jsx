@@ -18,10 +18,13 @@ export default function NavBar() {
   useEffect(() => { setRole(getAuth().role); }, [loc.pathname]);
 
   const logout = () => {
-    localStorage.removeItem("token");
-    setRole(null);
-    nav("/login", { replace: true });
-  };
+  localStorage.removeItem("token");   //  ⬅️  wichtig!
+  // optional: alte Keys aus Vorgängerversionen entsorgen
+  localStorage.removeItem("role");
+  setRole(null);
+  nav("/login", { replace: true });
+};
+
 
   if (!role) return null;           // nicht eingeloggt → keine NavBar
 
