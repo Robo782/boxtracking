@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api     from "../utils/api.js";
+import api from "../utils/api.js";
 import { getAuth } from "../utils/auth.js";
 
 export default function Login() {
@@ -17,8 +17,8 @@ export default function Login() {
       .post("/auth/login", { username, password })
       .then(({ token }) => {
         localStorage.setItem("token", token);
-        const { role } = getAuth();
-        nav(role === "admin" ? "/dashboard" : "/boxes", { replace: true });
+        getAuth();              // nur um side-effects (z. B. storage-events) zu triggern
+        nav("/boxes", { replace: true });   // ⬅️ immer zur Boxen-Übersicht
       })
       .catch(() => setErr("Login fehlgeschlagen"));
   };

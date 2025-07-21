@@ -15,7 +15,7 @@ const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 
 export default function App() {
   const { role, valid } = getAuth();
-  const authed = valid && role;           // true = eingeloggt & Token nicht abgelaufen
+  const authed = valid && role;   // true = eingeloggt & Token gültig
 
   return (
     <BrowserRouter>
@@ -23,19 +23,16 @@ export default function App() {
 
       <Suspense fallback={<p className="p-4">Lade …</p>}>
         <Routes>
+          {/* ───────── Root-Pfad ───────── */}
+          <Route
+            path="/"
+            element={<Navigate to={authed ? "/boxes" : "/login"} replace />}
+          />
+
           {/* ───────── Login immer erreichbar ───────── */}
           <Route
             path="/login"
-            element={
-              authed ? (
-                <Navigate
-                  to={role === "admin" ? "/dashboard" : "/boxes"}
-                  replace
-                />
-              ) : (
-                <Login />
-              )
-            }
+            element={authed ? <Navigate to="/boxes" replace /> : <Login />}
           />
 
           {/* ───────── Geschützte Routen ───────── */}
@@ -56,8 +53,11 @@ export default function App() {
             </>
           )}
 
-          {/* ───────── Fallback: alles nach /login ───────── */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* ───────── Fallback ───────── */}
+          <Route
+            path="*"
+            element={<Navigate to={authed ? "/boxes" : "/login"} replace />}
+          />
         </Routes>
       </Suspense>
     </BrowserRouter>
