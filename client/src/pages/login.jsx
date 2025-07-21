@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../utils/api.js";
-import { getAuth } from "../utils/auth.js";
 
 export default function Login() {
   const nav = useNavigate();
@@ -12,13 +11,16 @@ export default function Login() {
 
   const onSubmit = (e) => {
     e.preventDefault();
+    setErr("");
 
     api
       .post("/auth/login", { username, password })
-      .then(({ token }) => {
+      .then((res) => {
+        const { token } = res.data;       // ✅ richtig aus dem Axios-Body holen
+        if (!token) throw new Error("kein Token");
+
         localStorage.setItem("token", token);
-        getAuth();              // nur um side-effects (z. B. storage-events) zu triggern
-        nav("/boxes", { replace: true });   // ⬅️ immer zur Boxen-Übersicht
+        nav("/boxes", { replace: true }); // immer Boxen-Übersicht
       })
       .catch(() => setErr("Login fehlgeschlagen"));
   };

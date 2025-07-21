@@ -25,7 +25,7 @@ export default function NavBar() {
   const { role } = auth;
 
   const logout = () => {
-    localStorage.removeItem("token");      // einzig relevante Key
+    localStorage.removeItem("token");   // löscht auch evtl. "undefined"
     localStorage.removeItem("role");       // Altlast aus früherer Version
     setAuth({ role: null, valid: false }); // NavBar sofort verstecken
     nav("/login", { replace: true });
