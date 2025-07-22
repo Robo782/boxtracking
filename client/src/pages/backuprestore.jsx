@@ -1,43 +1,60 @@
 import { useState } from "react";
-import api from "@/utils/api";
+import api from "../utils/api.js";
 
 export default function BackupRestore() {
-  const [err,setErr] = useState("");
+  const [msg, setMsg] = useState("");
 
-  const backup = () =>
-    api.get("/admin/backup")
-       .then(({url})=>window.open(url,"_blank"))
-       .catch(()=>setErr("Backup fehlgeschlagen"));
-
-  const upload = e => {
-    const f = e.target.files[0];
-    if(!f) return;
-    const fd = new FormData(); fd.append("db",f);
-    api.post("/admin/restore",fd,{file:true})
-       .then(()=>alert("Import ok – Seite neu laden!"))
-       .catch(()=>setErr("Import fehlgeschlagen"));
-  };
-
-  const reset = () =>
-    confirm("Wirklich ALLE Daten löschen?") &&
-    api.post("/admin/reset").then(()=>location.reload());
+  const post = (url, body) =>
+    api.post(url, body).then((r) => setMsg(r.message || "OK")).catch(setMsg);
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Backup / Restore</h1>
+    <main className="p-4 flex flex-col gap-6 max-w-lg">
+      <h1 className="text-2xl font-semibold">Backup &amp; Daten-Tools</h1>
 
-      {err && <p className="text-error">{err}</p>}
+      {/* Backup / Restore */}
+      <section className="border rounded p-4 flex flex-col gap-3">
+        <h2 className="font-semibold">Backup</h2>
 
-      <div className="flex gap-2">
-        <button onClick={backup} className="btn btn-primary">Backup herunterladen</button>
+        <a href="/api/admin/backup" className="btn btn-sm btn-outline">
+          Datenbank herunterladen
+        </a>
 
-        <label className="btn">
-          DB hochladen
-          <input type="file" hidden onChange={upload} />
+        <label className="flex flex-col gap-2">
+          <span>Datenbank hochladen</span>
+          <input
+            type="file"
+            className="file-input file-input-bordered file-input-sm"
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const form = new FormData();
+              form.append("file", file);
+              post("/api/admin/restore", form);
+            }}
+          />
         </label>
+      </section>
 
-        <button onClick={reset} className="btn btn-error">Zurücksetzen</button>
-      </div>
-    </div>
+      {/* Reset / Init */}
+      <section className="border rounded p-4 flex flex-col gap-3">
+        <h2 className="font-semibold">Daten-Werkzeuge</h2>
+
+        <button
+          className="btn btn-sm btn-warning"
+          onClick={() => post("/api/admin/reset-data")}
+        >
+          Box-Daten zurücksetzen
+        </button>
+
+        <button
+          className="btn btn-sm btn-primary"
+          onClick={() => post("/api/admin/init-data")}
+        >
+          Demo-Boxen erzeugen
+        </button>
+      </section>
+
+      {msg && <p className="text-green-600">{msg}</p>}
+    </main>
   );
 }
