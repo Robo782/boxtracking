@@ -46,18 +46,18 @@ export default function BackupRestore() {
         <h2 className="font-semibold">Daten-Werkzeuge</h2>
 
         <button
-          className="btn btn-sm btn-warning"
-          onClick={() => post("/admin/reset-data")}   {/*  ← ohne /api */}
-        >
-          Box-Daten zurücksetzen
-        </button>
+  className="btn btn-sm btn-warning"
+  onClick={() => post("/admin/reset-data")}
+>
+  Box-Daten zurücksetzen
+</button>
 
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={() => post("/admin/init-data")}    {/*  ← ohne /api */}
-        >
-          Demo-Boxen erzeugen
-        </button>
+<button
+  className="btn btn-sm btn-primary"
+  onClick={() => post("/admin/init-data")}
+>
+  Demo-Boxen erzeugen
+</button>
       </section>
 
       {msg && <p className="text-green-600">{msg}</p>}
