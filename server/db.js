@@ -46,21 +46,33 @@ db.serialize(() => {
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       serial        TEXT UNIQUE,
       cycles        INTEGER DEFAULT 0,
+      maintenance_count INTEGER DEFAULT 0,       -- ★ NEU
+      status        TEXT  DEFAULT 'available',   -- ★ NEU
       device_serial TEXT,
-      pcc_id        TEXT,              -- ★ NEU
+      pcc_id        TEXT,
       departed      INTEGER DEFAULT 0,
       returned      INTEGER DEFAULT 0,
       is_checked    INTEGER DEFAULT 0,
       checked_by    TEXT
     )
   `);
+
   db.all(`PRAGMA table_info(boxes)`, (err, cols) => {
     if (err) return console.error(err);
     const have = n => cols.some(c => c.name === n);
+
     if (!have("pcc_id"))
       db.run(`ALTER TABLE boxes ADD COLUMN pcc_id TEXT`);
+
     if (!have("is_checked"))
       db.run(`ALTER TABLE boxes ADD COLUMN is_checked INTEGER DEFAULT 0`);
+
+    /* ★ neue Spalten nur hinzufügen, wenn sie noch fehlen */
+    if (!have("status"))
+      db.run(`ALTER TABLE boxes ADD COLUMN status TEXT DEFAULT 'available'`);
+
+    if (!have("maintenance_count"))
+      db.run(`ALTER TABLE boxes ADD COLUMN maintenance_count INTEGER DEFAULT 0`);
   });
 
   /* ---------- BOX_HISTORY --------------------------------- */

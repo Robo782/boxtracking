@@ -1,85 +1,67 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api from "@/utils/api";
 
 export default function BoxNext() {
-  const { id } = useParams();
-  const nav    = useNavigate();
+  const { id }  = useParams();
+  const nav     = useNavigate();
+  const action  = new URLSearchParams(useLocation().search).get("action"); // load|return|check|done
 
-  const [box,      setBox]      = useState(null);
-  const [loading,  setLoading ] = useState(true);
-  const [err,      setErr ]     = useState("");
-  /* Formular-States */
+  const [box, setBox] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  /* Form-States */
   const [deviceSerial, setDeviceSerial] = useState("");
   const [pccId,        setPccId       ] = useState("");
   const [checker,      setChecker     ] = useState("");
 
-  /* ─── Box holen ───────────────────────────────────── */
   useEffect(() => {
     api.get(`/boxes/${id}`)
-       .then(b => { setBox(b); setLoading(false); })
-       .catch(e => { setErr(e.message); setLoading(false); });
+       .then(setBox)
+       .catch(e => setErr(e.message));
   }, [id]);
 
-  if (loading)  return <p className="p-4">Lade …</p>;
-  if (err)      return <p className="p-4 text-red-500">{err}</p>;
-  if (!box)     return null;
+  if (err)  return <p className="p-4 text-red-500">{err}</p>;
+  if (!box) return <p className="p-4">Lade …</p>;
 
-  /* aktuellen Schritt & Ziel ermitteln */
-  let action, headline, submitLabel;
-  if (box.departed && !box.returned) {
-    action      = "return";
-    headline    = "Box zurückbuchen";
-    submitLabel = "als zurück markieren";
-  } else if (box.returned && !box.is_checked) {
-    action      = "check";
-    headline    = "Box prüfen";
-    submitLabel = "Prüfung speichern";
-  } else {
-    action      = "load";            // Available oder Checked
-    headline    = "Box beladen";
-    submitLabel = "Beladung speichern";
-  }
-
-  /* Submit */
   const onSubmit = (e) => {
     e.preventDefault();
-    setErr("");
+    setBusy(true); setErr("");
 
     const body =
-      action === "load"
-        ? { device_serial: deviceSerial.trim().toUpperCase(),
-            pcc_id:        pccId.trim().toUpperCase() }
-        : action === "check"
-        ? { checked_by:   checker.trim().toUpperCase() }
-        : undefined;
+      action === "load"  ? { device_serial: deviceSerial.trim(), pcc_id: pccId.trim() } :
+      action === "check" ? { checked_by: checker.trim() } : undefined;
 
     api.put(`/boxes/${id}/${action}`, body)
        .then(() => nav("/boxes", { replace: true }))
-       .catch(e => setErr(e.message));
+       .catch(e => { setErr(e.message); setBusy(false); });
   };
 
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-semibold mb-4">
-        {headline} (Box {box.serial})
+    <main className="p-4 max-w-md">
+      <h1 className="text-2xl font-semibold mb-6">
+        {action === "load"   && `Box ${box.serial} beladen`}
+        {action === "return" && `Box ${box.serial} zurückmelden`}
+        {action === "check"  && `Box ${box.serial} prüfen`}
+        {action === "done"   && `Wartung abschließen`}
       </h1>
 
       {err && <p className="text-red-500 mb-4">{err}</p>}
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-3 max-w-md">
+      <form onSubmit={onSubmit} className="flex flex-col gap-3">
         {action === "load" && (
           <>
             <input
               className="input input-bordered"
-              placeholder="Device Serial (z. B. 1234-AB)"
+              placeholder="Device Serial"
               value={deviceSerial}
               onChange={e => setDeviceSerial(e.target.value)}
               required
             />
             <input
               className="input input-bordered"
-              placeholder="PCC ID (z. B. PCC 12345 XY)"
+              placeholder="PCC ID"
               value={pccId}
               onChange={e => setPccId(e.target.value)}
               required
@@ -97,10 +79,16 @@ export default function BoxNext() {
           />
         )}
 
-        {/* Bei „return“ sind keine zusätzlichen Felder nötig */}
+        {action === "done" && (
+          <p>
+            Durch Klick auf <strong>Speichern</strong> wird die Box wieder
+            freigegeben, <em>cycles</em> auf&nbsp;0 gesetzt und&nbsp;
+            <em>maintenance _count</em> um 1 erhöht.
+          </p>
+        )}
 
-        <button className="btn btn-primary" type="submit">
-          {submitLabel}
+        <button className="btn btn-primary mt-2" disabled={busy}>
+          Speichern
         </button>
       </form>
     </main>
