@@ -17,18 +17,18 @@ router.post("/users", authenticate, requireAdmin, admin.createUser);
 router.post("/reset-data", authenticate, requireAdmin, admin.resetData);
 router.post("/init-data",  authenticate, requireAdmin, admin.initData);
 
-/* Abwärts­kompatible Aliase */
+/* Abwärtskompatible Aliase */
 router.post("/reset",      authenticate, requireAdmin, admin.resetData);
 router.post("/seed-boxes", authenticate, requireAdmin, admin.initData);
 
 router.patch("/boxes/:id", authenticate, requireAdmin, admin.updateBox);
 
 /* ───────────── Backup / Restore ────────────── */
-router.get ("/backup",  authenticate, requireAdmin, backup.backup);     // Download DB
+router.get ("/backup",  authenticate, requireAdmin, backup.backupDb);     // Download DB
 router.post("/restore",
   authenticate,
   requireAdmin,
   upload.single("file"),
-  backup.restore);                                                      // Upload DB
+  backup.restoreDb);                                                      // Upload DB
 
 module.exports = router;
