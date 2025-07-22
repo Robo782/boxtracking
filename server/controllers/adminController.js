@@ -1,51 +1,43 @@
-const db   = require("../db");
-const fs   = require("fs");
-const path = require("path");
+const bcrypt = require("bcryptjs");
+const db     = require("../db");
 
-/* ───────────────────────── Backup / Restore ────────────────────────── */
-/*  (dein vorhandener Code blieb unverändert)                            */
+/* ─────────────── USERS ─────────────────────────────────── */
 
-exports.backup = (_, res) => {
-  const file = path.join(__dirname, "..", "db", "database.sqlite");
-  res.download(file, "database.sqlite");
+exports.getUsers = async (_, res) => {
+  const rows = await db.all("SELECT id, username, role FROM users ORDER BY id");
+  res.json(rows);
 };
 
-exports.restore = (req, res) => {
-  if (!req.file) return res.status(400).send("file missing");
-  const dst = path.join(__dirname, "..", "db", "database.sqlite");
-  fs.copyFileSync(req.file.path, dst);
-  res.json({ ok: true, message: "Backup eingespielt" });
-};
+exports.createUser = async (req, res) => {
+  const { username, password, role = "user" } = req.body;
+  if (!username || !password) return res.status(400).send("username & password nötig");
 
-/* ──────────────────────   NEU: Reset & Init   ──────────────────────── */
-
-/** Box-Daten zurücksetzen (Struktur bleibt) */
-exports.resetData = async (_, res) => {
+  const hash = await bcrypt.hash(password, 10);
   try {
-    await db.run("DELETE FROM box_history");   // Historie löschen
-
-    await db.run(`
-      UPDATE boxes
-         SET cycles            = 0,
-             maintenance_count = 0,
-             status            = 'available',
-             device_serial     = NULL,
-             pcc_id            = NULL,
-             departed          = 0,
-             returned          = 0,
-             is_checked        = 0,
-             checked_by        = NULL,
-             loaded_at         = NULL,
-             unloaded_at       = NULL
-    `);
-
-    res.json({ ok: true, message: "Box-Daten zurückgesetzt" });
+    await db.run(
+      "INSERT INTO users (username, passwordHash, role) VALUES (?,?,?)",
+      username, hash, role
+    );
+    res.json({ ok: true });
   } catch (e) {
-    res.status(500).send(e.message);
+    res.status(400).send(e.message);
   }
 };
 
-/** Demodaten erzeugen, falls Tabelle leer ist */
+/* ─────────────── BOX-TOOLS ─────────────────────────────── */
+
+exports.resetData = async (_, res) => {
+  await db.run("DELETE FROM box_history");
+  await db.run(`
+    UPDATE boxes SET
+      cycles=0, maintenance_count=0, status='available',
+      device_serial=NULL, pcc_id=NULL,
+      departed=0, returned=0, is_checked=0,
+      checked_by=NULL, loaded_at=NULL, unloaded_at=NULL
+  `);
+  res.json({ ok: true, message: "Box-Daten zurückgesetzt" });
+};
+
 exports.initData = async (_, res) => {
   const { cnt } = await db.get("SELECT COUNT(*) AS cnt FROM boxes");
   if (cnt > 0) return res.json({ ok: false, message: "DB enthält bereits Boxen" });
@@ -56,3 +48,10 @@ exports.initData = async (_, res) => {
 
   res.json({ ok: true, message: "30 Demo-Boxen angelegt" });
 };
+
+/* Aliase für alten Code */
+exports.seedBoxes = exports.initData;
+
+/* Platzhalter – nach Bedarf implementieren */
+exports.updateBox = (req, res) =>
+  res.status(501).send("updateBox nicht implementiert");
