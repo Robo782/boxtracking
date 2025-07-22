@@ -11,6 +11,7 @@ const BoxesManage    = lazy(() => import("./pages/boxesmanage.jsx"));
 const AdminDashboard = lazy(() => import("./pages/admindashboard.jsx"));
 const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
 const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
+const BoxNext        = lazy(() => import("./pages/boxnext.jsx"));
 
 export default function App() {
   /* ---------- zentrale Auth-Quelle ---------- */
@@ -56,6 +57,7 @@ export default function App() {
               <Route path="/boxes" element={<Boxes />} />
               <Route path="/boxes/:id" element={<BoxDetail />} />
               <Route path="/boxes/:id/history" element={<BoxHistory />} />
+              <Route path="/boxes/:id/next"    element={<BoxNext />} />
               <Route path="/boxesmanage" element={<BoxesManage />} />
 
               {role === "admin" && (
