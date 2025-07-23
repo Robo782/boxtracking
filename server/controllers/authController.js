@@ -1,63 +1,53 @@
-// server/controllers/authController.js
-const db        = require("../db");
-const bcrypt    = require("bcrypt");
-const jwt       = require("jsonwebtoken");
+/**
+ * Controller-Logik für Login, Logout & Token-Handling
+ */
 
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
+const bcrypt = require('bcryptjs');           // ← vorher stand hier require('bcrypt')
+const jwt    = require('jsonwebtoken');
+const db     = require('../db');
 
 /**
- * POST /api/auth/login
- * erwartet: { username: "...", password: "..." }
- * - oder alternativ: { email: "...", password: "..." }
+ * Hilfsfunktion: Passwort hashen
  */
-exports.login = (req, res) => {
-  try {
-    let { username, email, password } = req.body;
+async function hashPassword(plain) {
+  const saltRounds = 10;
+  return await bcrypt.hash(plain, saltRounds);
+}
 
-    // Grundvalidierung ─────────────────────────────────────────────
-    if (!password || (!username && !email)) {
-      return res.status(400).json({ error: "username / email und Passwort erforderlich" });
+/**
+ * Login-Endpunkt
+ */
+exports.login = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // User in DB suchen
+    const user = db
+      .prepare('SELECT id, password FROM users WHERE username = ?')
+      .get(username);
+
+    if (!user) {
+      return res.status(401).json({ message: 'Ungültige Anmeldedaten' });
     }
 
-    // einheitliche Schreibweise → lowercase & trim
-    const loginId = (username || email).trim().toLowerCase();
+    // Passwort prüfen
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) {
+      return res.status(401).json({ message: 'Ungültige Anmeldedaten' });
+    }
 
-    // User suchen (Case-insensitive)
-    db.get(
-      `SELECT * FROM users WHERE LOWER(username) = ?`,
-      [loginId],
-      async (err, user) => {
-        if (err) {
-          console.error("❌ DB-Fehler:", err.message);
-          return res.status(500).json({ error: "Interner Serverfehler" });
-        }
+    // JWT erzeugen
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+      expiresIn: '8h',
+    });
 
-        if (!user) {
-          return res.status(401).json({ error: "Ungültige Zugangsdaten" });
-        }
-
-        // Passwort prüfen
-        const match = await bcrypt.compare(password, user.passwordHash);
-        if (!match) {
-          return res.status(401).json({ error: "Ungültige Zugangsdaten" });
-        }
-
-        // JWT generieren
-        const token = jwt.sign(
-          {
-            id:       user.id,
-            username: user.username,
-            role:     user.role,
-          },
-          JWT_SECRET,
-          { expiresIn: "8h" }
-        );
-
-        return res.json({ token });
-      }
-    );
-  } catch (e) {
-    console.error("❌ Unerwarteter Fehler:", e);
-    return res.status(500).json({ error: "Interner Serverfehler" });
+    res.json({ token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Serverfehler' });
   }
 };
+
+/**
+ * (weitere Controller-Funktionen ...)
+ */
