@@ -26,8 +26,13 @@ COPY server/package*.json ./
 RUN npm ci
 COPY server/. .
 
+# ---------- WICHTIG: Render-Disk beschreibbar machen ----------
+# Falls die Disk root:root gemountet wurde, erhält der node-User jetzt Rechte
+RUN mkdir -p /app/server/db && chown -R node:node /app/server/db
+
 # ---------- Vite-Build ins Backend kopieren ----------
 COPY --from=client-build /app/client/dist ./static
 
-# ---------- Start ----------
+# ---------- Als node-User starten ----------
+USER node
 CMD ["node", "server.js"]
