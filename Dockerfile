@@ -22,12 +22,12 @@ COPY server/. .
 # --- Vite bundle ---
 COPY --from=client-build /app/client/dist ./static
 
-# --- Entry-Script kopieren & ausführbar machen ---
+# --- Entry-Script ---
 COPY server/docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# --- als node-User laufen ---
-USER node
+# --- kein USER node mehr hier! ---
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # --- Start ---
 ENTRYPOINT ["sh", "/usr/local/bin/entrypoint.sh"]
