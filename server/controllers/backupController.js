@@ -1,32 +1,21 @@
-// server/controllers/backupController.js
-const path   = require("path");
-const fs     = require("fs");
-const util   = require("util");
-const dbPath = path.join(__dirname, "..", "db", "database.sqlite");
+const fs   = require("fs");
+const path = require("path");
+const db   = require("../db");                    // liefert auch DB_FILE
 
-/* ----------  GET /api/admin/backup  ----------
-   Sendet die aktuelle DB-Datei als Download     */
-exports.backupDb = (req, res) => {
-  const stamp  = new Date().toISOString().replace(/[:.]/g, "-");
-  const fname  = `backup-${stamp}.sqlite`;
-  res.download(dbPath, fname);
+/* ── Download: komplette SQLite-Datei ────────── */
+exports.backupDb = (_, res) => {
+  res.download(db.DB_FILE, path.basename(db.DB_FILE));
 };
 
-/* ----------  POST /api/admin/restore  ----------
-   Erwartet multipart/form-data  field = file
-   Überschreibt die produktive DB                  */
-exports.restoreDb = async (req, res) => {
-  if (!req.file)
-    return res.status(400).json({ error: "No file uploaded" });
+/* ── Restore: hochgeladenes Backup einspielen ── */
+exports.restoreDb = (req, res) => {
+  if (!req.file) return res.status(400).send("file missing");
 
-  const tmp = req.file.path;
   try {
-    await util.promisify(fs.copyFile)(tmp, dbPath);
-    res.json({ ok: true });
+    fs.copyFileSync(req.file.path, db.DB_FILE);
+    res.json({ ok: true, message: "Backup eingespielt" });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Restore failed" });
-  } finally {
-    fs.unlink(tmp, ()=>{});
+    console.error("Restore failed:", e.message);
+    res.status(500).json({ error: e.message });
   }
 };
