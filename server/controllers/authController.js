@@ -1,53 +1,64 @@
-/**
- * Controller-Logik für Login, Logout & Token-Handling
- */
+// server/controllers/authController.js
+const db        = require("../db");
+const bcrypt    = require("bcrypt");
+const jwt       = require("jsonwebtoken");
 
-const bcrypt = require('bcryptjs');           // ← vorher stand hier require('bcrypt')
-const jwt    = require('jsonwebtoken');
-const db     = require('../db');
-
-/**
- * Hilfsfunktion: Passwort hashen
- */
-async function hashPassword(plain) {
-  const saltRounds = 10;
-  return await bcrypt.hash(plain, saltRounds);
-}
+const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
 /**
- * Login-Endpunkt
+ * POST /api/auth/login
+ * erwartet: { username: "...", password: "..." }
+ * - oder alternativ: { email: "...", password: "..." }
  */
-exports.login = async (req, res) => {
+exports.login = (req, res) => {
   try {
-    const { username, password } = req.body;
+    let { username, email, password } = req.body;
 
-    // User in DB suchen
-    const user = db
-      .prepare('SELECT id, password FROM users WHERE username = ?')
-      .get(username);
-
-    if (!user) {
-      return res.status(401).json({ message: 'Ungültige Anmeldedaten' });
+    // Grundvalidierung ─────────────────────────────────────────────
+    if (!password || (!username && !email)) {
+      return res.status(400).json({ error: "username / email und Passwort erforderlich" });
     }
 
-    // Passwort prüfen
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) {
-      return res.status(401).json({ message: 'Ungültige Anmeldedaten' });
-    }
+    // einheitliche Schreibweise → lowercase & trim
+    const loginId = (username || email).trim().toLowerCase();
 
-    // JWT erzeugen
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-      expiresIn: '8h',
-    });
+    // User suchen (Case-insensitive)
+    db.get(
+      `SELECT * FROM users WHERE LOWER(username) = ?`,
+      [loginId],
+      async (err, user) => {
+        if (err) {
+          console.error("❌ DB-Fehler:", err.message);
+          return res.status(500).json({ error: "Interner Serverfehler" });
+        }
 
-    res.json({ token });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Serverfehler' });
+        if (!user) {
+          return res.status(401).json({ error: "Ungültige Zugangsdaten" });
+        }
+
+        // Passwort prüfen
+        const match = await bcrypt.compare(password, user.passwordHash);
+        if (!match) {
+          return res.status(401).json({ error: "Ungültige Zugangsdaten" });
+        }
+
+        // JWT generieren
+        const token = jwt.sign(
+          {
+            id:       user.id,
+            username: user.username,
+            role:     user.role,
+          },
+          JWT_SECRET,
+          { expiresIn: "8h" }
+        );
+
+        return res.json({ token });
+      }
+    );
+  } catch (e) {
+    console.error("❌ Unerwarteter Fehler:", e);
+    
+    return res.status(500).json({ error: "Interner Serverfehler" });
   }
 };
-
-/**
- * (weitere Controller-Funktionen ...)
- */
