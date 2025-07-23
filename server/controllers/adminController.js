@@ -1,12 +1,9 @@
 const bcrypt = require("bcrypt");
 const db     = require("../db");
 
-/* ─── USER-FUNKTIONEN ─────────────────────────── */
-
+/* ---------- USER ---------- */
 exports.getUsers = async (_, res) => {
-  const rows = await db.all(
-    "SELECT id, username, role FROM users ORDER BY id"
-  );
+  const rows = await db.all("SELECT id, username, role FROM users");
   res.json(rows);
 };
 
@@ -23,54 +20,36 @@ exports.createUser = async (req, res) => {
     );
     res.json({ ok: true });
   } catch (e) {
-    /* UNIQUE-Verletzung abfangen statt crashen */
     if (e.message.includes("UNIQUE"))
       return res.status(409).json({ error: "Username existiert bereits" });
-    console.error("❌ createUser:", e);
-    res.status(500).json({ error: "Interner Serverfehler" });
+    res.status(500).json({ error: e.message });
   }
 };
 
-/* ─── BOX-TOOLS ───────────────────────────────── */
-
+/* ---------- BOX-TOOLS ---------- */
 exports.resetData = async (_, res) => {
-  try {
-    await db.run("DELETE FROM box_history");
-    await db.run(`
-      UPDATE boxes SET
-        cycles=0, maintenance_count=0, status='available',
-        device_serial=NULL, pcc_id=NULL,
-        departed=0, returned=0, is_checked=0,
-        checked_by=NULL, loaded_at=NULL, unloaded_at=NULL
-    `);
-    res.json({ ok: true, message: "Box-Daten zurückgesetzt" });
-  } catch (e) {
-    console.error("❌ resetData:", e);
-    res.status(500).json({ error: "DB-Fehler" });
-  }
+  await db.run("DELETE FROM box_history");
+  await db.run("DELETE FROM boxes");
+  res.json({ ok: true });
 };
 
 exports.initData = async (_, res) => {
   try {
     const { cnt } = await db.get("SELECT COUNT(*) AS cnt FROM boxes");
-    if (cnt > 0)
-      return res.json({ ok: false, message: "DB enthält bereits Boxen" });
-
+    if (cnt > 0) {
+      if (res) return res.json({ ok: false, message: "DB enthält bereits Boxen" });
+      return;
+    }
     const stmt = db.prepare("INSERT INTO boxes (serial) VALUES (?)");
     for (let i = 1; i <= 30; i++)
       stmt.run(`BOX-${String(i).padStart(3, "0")}`);
     stmt.finalize();
-
-    res.json({ ok: true, message: "30 Demo-Boxen angelegt" });
+    if (res) res.json({ ok: true, message: "30 Demo-Boxen angelegt" });
   } catch (e) {
-    console.error("❌ initData:", e);
-    res.status(500).json({ error: "DB-Fehler" });
+    console.error("initData:", e.message);
+    if (res) res.status(500).json({ error: e.message });
   }
 };
 
-/* Aliase (alt) */
-exports.seedBoxes = exports.initData;
-
-/* Noch nicht implementiert */
-exports.updateBox = (_req, res) =>
+exports.updateBox = (_, res) =>
   res.status(501).json({ error: "updateBox nicht implementiert" });

@@ -86,6 +86,10 @@ db.serialize(() => {
       db.run("ALTER TABLE box_history ADD COLUMN pcc_id TEXT");
   });
 });
+/* ── bei leerer DB automatisch Demo-Boxen erzeugen ───────── */
+const admin = require("./controllers/adminController");
+admin.initData(null, null);
+
 
 module.exports = db;
 module.exports.DB_FILE = dbFile;           // <- für Backup-Controller
