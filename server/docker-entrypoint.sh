@@ -1,13 +1,12 @@
-#!/bin/sh
+#!/usr/bin/env sh
 set -e
 
-# ── 1) als root: Rechte auf das gemountete Render-Verzeichnis setzen ──────────
-if [ "$(id -u)" = 0 ]; then
-  chown -R node:node /app/server/db 2>/dev/null || true
+# Stelle sicher, dass das DB-Verzeichnis schreibbar ist
+DISK_DIR="${RENDER_DISK:-/app/server/db}"
+mkdir -p "$DISK_DIR"
+chmod 770 "$DISK_DIR"
 
-  # ── 2) auf den unprivilegierten User wechseln & Server starten ──────────────
-  exec gosu node node server.js            # <- su-exec ➜ gosu
-fi
+echo "[INFO] DB-Verzeichnis: $DISK_DIR"
+echo "[INFO] Starte Backend …"
 
-# falls Skript schon als node aufgerufen wurde:
-exec node server.js
+/usr/local/bin/node server.js

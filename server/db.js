@@ -1,95 +1,42 @@
-/**
- * SQLite-Initialisierung + Schema-Self-Healing
- * -------------------------------------------
- * – Persistente Render-Disk ist auf  /app/server/db  gemountet.
- * – Alternativ kann der Pfad per  DB_FILE=/abs/path.db  überschrieben werden.
- */
-const sqlite3 = require("sqlite3").verbose();
-const fs      = require("fs");
-const path    = require("path");
+// server/db.js
+//
+// Zentrale DB–Abstraktion, die dieselbe API wie das alte sqlite3-Objekt
+// bereitstellt, intern aber auf „better-sqlite3“ setzt (synchrone Engine).
+//
+//  db.run(sql, [params])
+//  db.get(sql, [params])
+//  db.all(sql, [params])
+//  db.exec(sql)
+//
+//  ➜  KEIN Callback-Style mehr nötig.
+//  ➜  Alle Aufrufe können – müssen aber nicht – mit await benutzt werden.
+//      (die Funktionen geben synchron Werte zurück, aber ein Promise.resolve
+//       umschließt sie, sodass `await db.get()` weiter funktioniert)
 
-/* ── Pfad bestimmen ─────────────────────────────────────── */
-const defaultDir  = path.join(__dirname, "db");
-const dbFile      = process.env.DB_FILE
-                  || path.join(defaultDir, "database.sqlite");
+const path  = require('path');
+const fs    = require('fs');
+const Database = require('better-sqlite3');
 
-/* Ordner anlegen, falls er noch nicht existiert */
-fs.mkdirSync(path.dirname(dbFile), { recursive: true });
+// 1) Pfad ermitteln ----------------------------------------------------------
+const DISK_PATH = process.env.RENDER_DISK || '/app/server/db';   // Render-Disk
+fs.mkdirSync(DISK_PATH, { recursive: true });
 
-/* ── Verbindung öffnen ─────────────────────────────────── */
-const db = new sqlite3.Database(
-  dbFile,
-  sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE
-);
+const DB_FILE   = process.env.DB_FILE   ||
+                  path.join(DISK_PATH, 'database.sqlite');
 
-/* Helper */
-const colExists = (cols, n) => cols.some(c => c.name === n);
+// 2) Datenbank öffnen --------------------------------------------------------
+const raw = new Database(DB_FILE);
 
-/* ── Schema + Migration ─────────────────────────────────── */
-db.serialize(() => {
-  db.run("PRAGMA journal_mode=WAL");
-  db.run("PRAGMA busy_timeout=5000");
-
-  /* USERS */
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      passwordHash TEXT,
-      role TEXT CHECK(role IN ('user','admin')) NOT NULL DEFAULT 'user'
-    )
-  `);
-
-  /* BOXES */
-  db.run(`
-    CREATE TABLE IF NOT EXISTS boxes (
-      id                INTEGER PRIMARY KEY AUTOINCREMENT,
-      serial            TEXT UNIQUE,
-      cycles            INTEGER DEFAULT 0,
-      maintenance_count INTEGER DEFAULT 0,
-      status            TEXT DEFAULT 'available',
-      device_serial     TEXT,
-      pcc_id            TEXT,
-      departed          INTEGER DEFAULT 0,
-      returned          INTEGER DEFAULT 0,
-      is_checked        INTEGER DEFAULT 0,
-      checked_by        TEXT,
-      loaded_at         TEXT,
-      unloaded_at       TEXT
-    )
-  `);
-
-  db.all("PRAGMA table_info(boxes)", (_, cols) => {
-    const add = (n, def) => db.run(`ALTER TABLE boxes ADD COLUMN ${n} ${def}`);
-    if (!colExists(cols, "maintenance_count")) add("maintenance_count", "INTEGER DEFAULT 0");
-    if (!colExists(cols, "status"))             add("status",             "TEXT DEFAULT 'available'");
-    if (!colExists(cols, "loaded_at"))          add("loaded_at",          "TEXT");
-    if (!colExists(cols, "unloaded_at"))        add("unloaded_at",        "TEXT");
-    if (!colExists(cols, "checked_by"))         add("checked_by",         "TEXT");
-  });
-
-  /* BOX_HISTORY */
-  db.run(`
-    CREATE TABLE IF NOT EXISTS box_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      box_id        INTEGER,
-      device_serial TEXT,
-      pcc_id        TEXT,
-      loaded_at     TEXT,
-      unloaded_at   TEXT,
-      checked_by    TEXT
-    )
-  `);
-
-  db.all("PRAGMA table_info(box_history)", (_, cols) => {
-    if (!colExists(cols, "pcc_id"))
-      db.run("ALTER TABLE box_history ADD COLUMN pcc_id TEXT");
-  });
-});
-/* ── bei leerer DB automatisch Demo-Boxen erzeugen ───────── */
-const admin = require("./controllers/adminController");
-admin.initData(null, null);
-
+// 3) Kompatibilitäts-Wrapper -------------------------------------------------
+function promisify(fn) {
+  return (...args) => Promise.resolve().then(() => fn(...args));
+}
+const db = {
+  run : promisify((sql, params = []) => raw.prepare(sql).run(params)),
+  get : promisify((sql, params = []) => raw.prepare(sql).get(params)),
+  all : promisify((sql, params = []) => raw.prepare(sql).all(params)),
+  exec: promisify(raw.exec.bind(raw)),
+  transaction: raw.transaction.bind(raw)
+};
 
 module.exports = db;
-module.exports.DB_FILE = dbFile;           // <- für Backup-Controller
