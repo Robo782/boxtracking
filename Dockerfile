@@ -1,36 +1,37 @@
 ###############################################################################
-# 1) Frontend-Build (unverändert)                                             #
+# 1) Frontend-Build (Vite)                                                    #
 ###############################################################################
 FROM node:18 AS client-build
-WORKDIR /app/client
-COPY client/package*.json ./
-RUN npm ci
-COPY client/. .
-RUN npm run build
 
+WORKDIR /app/client
+
+COPY client/package*.json ./
+RUN npm ci          # inkl. devDependencies (Vite)
+
+COPY client/. .
+RUN npm run build   # erzeugt /app/client/dist
 ###############################################################################
-# 2) Backend Layer                                                            #
+# 2) Backend + fertiges Frontend                                              #
 ###############################################################################
 FROM node:18
+
 WORKDIR /app/server
 
-# --- Backend deps ---
+# ── Backend-Abhängigkeiten ───────────────────────────────────────────────────
 COPY server/package*.json ./
 RUN npm ci
 COPY server/. .
 
-# --- Vite bundle ---
+# ── gosu nachinstallieren (für das Entry-Script) ────────────────────────────
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends gosu \
+  && rm -rf /var/lib/apt/lists/*
+
+# ── Frontend-Bundle ins Backend kopieren ────────────────────────────────────
 COPY --from=client-build /app/client/dist ./static
 
-# …
-
-# ---------- Entry-Script ----------
+# ── Entry-Script ────────────────────────────────────────────────────────────
 COPY server/docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# kein USER node mehr nötig – das macht das Script selbst
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
-
-# --- Start ---
-ENTRYPOINT ["sh", "/usr/local/bin/entrypoint.sh"]
