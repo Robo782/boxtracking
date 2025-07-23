@@ -1,21 +1,17 @@
-// server/middleware/authMiddleware.js
-const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
-
-function authenticate(req, res, next) {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.sendStatus(401);
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;           // enthält nun .role
-    next();
-  });
-}
-
-function requireAdmin(req, res, next) {
-  if (req.user?.role !== "admin") return res.sendStatus(403);
+/**
+ * Ganz einfache Auth-Helpers.
+ * requireAuth   – prüft, ob ein User-Objekt existiert (z. B. via JWT).
+ * requireAdmin  – prüft zusätzlich die isAdmin-Flagge.
+ * Passe das nach Bedarf an dein tatsächliches Auth-System an.
+ */
+function requireAuth(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Nicht eingeloggt.' });
   next();
 }
 
-module.exports = { authenticate, requireAdmin };
+function requireAdmin(req, res, next) {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin-Rechte nötig.' });
+  next();
+}
+
+module.exports = { requireAuth, requireAdmin };

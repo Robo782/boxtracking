@@ -1,27 +1,42 @@
-const router  = require("express").Router();
-const multer  = require("multer");
-const upload  = multer({ dest: "/tmp" });
+/**
+ * Admin-Router – alle Endpunkte, die nur Admin-User aufrufen dürfen
+ */
+const express = require('express');
+const adminController = require('../controllers/adminController');
+const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
-const { authenticate, requireAdmin } = require("../middleware/authMiddleware");
-const admin  = require("../controllers/adminController");
-const backup = require("../controllers/backupController");
+const router = express.Router();
 
-/* Users */
-router.get ("/users", authenticate, requireAdmin, admin.getUsers);
-router.post("/users", authenticate, requireAdmin, admin.createUser);
+/* Statistik zum aktuellen Datenbestand */
+router.get(
+  '/stats',
+  requireAuth,
+  requireAdmin,
+  adminController.getStats
+);
 
-/* Box-Tools */
-router.post("/reset-data", authenticate, requireAdmin, admin.resetData);
-router.post("/init-data",  authenticate, requireAdmin, admin.initData);
+/* Alles löschen (Boxen + History) */
+router.post(
+  '/reset',
+  requireAuth,
+  requireAdmin,
+  adminController.resetData
+);
 
-/* alte Aliase */
-router.post("/reset",      authenticate, requireAdmin, admin.resetData);
-router.post("/seed-boxes", authenticate, requireAdmin, admin.initData);
+/* Datenbank-Dump herunterladen (ZIP) */
+router.post(
+  '/backup',
+  requireAuth,
+  requireAdmin,
+  adminController.createBackup
+);
 
-router.patch("/boxes/:id", authenticate, requireAdmin, admin.updateBox);
-
-/* Backup */
-router.get ("/backup",  authenticate, requireAdmin, backup.backupDb);
-router.post("/restore", authenticate, requireAdmin, upload.single("file"), backup.restoreDb);
+/* Dump hochladen & wiederherstellen */
+router.post(
+  '/restore',
+  requireAuth,
+  requireAdmin,
+  adminController.restoreBackup
+);
 
 module.exports = router;

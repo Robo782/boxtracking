@@ -1,47 +1,91 @@
-// server/controllers/adminController.js
-const db = require('../db');
+/**
+ * Controller-Funktionen für Admin-Endpoints
+ */
+const fs = require('fs');
+const path = require('path');
+const archiver = require('archiver');
+const db = require('../db');          // besser-sqlite3 Wrapper
+const { promisify } = require('util');
 
-// Alle Verluste von Callback-Style entfernt.
-// Die Wrapper aus db.js liefern Promises – also bleibt await gültig.
+const unlinkAsync = promisify(fs.unlink);
 
-exports.resetData = async (_req, res) => {
+/* ─ helpers ─────────────────────────────────────────────────────────────── */
+
+const HISTORY_TABLE = 'box_history';
+const BOX_TABLE      = 'boxes';
+const DB_DIR         = path.join(__dirname, 'db');
+const DB_PATH        = path.join(DB_DIR, 'data.db');
+const BACKUP_DIR     = path.join(DB_DIR, 'backup');
+
+/* ─ controller ──────────────────────────────────────────────────────────── */
+
+exports.getStats = (_req, res) => {
   try {
-    await db.run('DELETE FROM box_history');
-    await db.run('DELETE FROM boxes');
-    res.json({ message: 'Alle Daten wurden zurückgesetzt.' });
+    const totalBoxes   = db.prepare(`SELECT COUNT(*) AS n FROM ${BOX_TABLE}`).get().n;
+    const totalHistory = db.prepare(`SELECT COUNT(*) AS n FROM ${HISTORY_TABLE}`).get().n;
+
+    res.json({ totalBoxes, totalHistory });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Reset fehlgeschlagen' });
+    console.error('getStats:', err);
+    res.status(500).json({ error: 'DB Error' });
   }
 };
 
-exports.initData = async (_req, res) => {
+exports.resetData = async (_req, res) => {
   try {
-    // Tabelle anlegen (falls noch nicht vorhanden)
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS boxes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        serial TEXT UNIQUE,
-        status TEXT DEFAULT 'available',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS box_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        box_id INTEGER,
-        action TEXT,
-        ts DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+    const trx = db.transaction(() => {
+      db.prepare(`DELETE FROM ${HISTORY_TABLE}`).run();
+      db.prepare(`DELETE FROM ${BOX_TABLE}`).run();
+    });
+    trx();
+    res.json({ ok: true, message: 'Alle Daten gelöscht.' });
+  } catch (err) {
+    console.error('resetData:', err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+};
 
-    // Beispiel-Box, wenn DB frisch ist
-    const row = await db.get('SELECT COUNT(*) AS cnt FROM boxes');
-    if (row.cnt === 0) {
-      await db.run('INSERT INTO boxes (serial) VALUES (?)', ['DEMO-0001']);
+exports.createBackup = async (_req, res) => {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+    const zipName = `backup_${Date.now()}.zip`;
+    const zipPath = path.join(BACKUP_DIR, zipName);
+
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    archive.pipe(output);
+    archive.file(DB_PATH, { name: 'data.db' });
+    await archive.finalize();
+
+    res.download(zipPath, zipName, async () => {
+      /** nach Auslieferung Aufräumen */
+      await unlinkAsync(zipPath).catch(() => {});
+    });
+  } catch (err) {
+    console.error('createBackup:', err);
+    res.status(500).json({ error: 'Backup Error' });
+  }
+};
+
+exports.restoreBackup = async (req, res) => {
+  try {
+    if (!req.files?.backup) {
+      return res.status(400).json({ error: 'Keine Backup-Datei hochgeladen.' });
     }
 
-    res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Init fehlgeschlagen' });
+    const uploaded = req.files.backup;
+    const tempPath = path.join(DB_DIR, `restore_${Date.now()}.db`);
+
+    await uploaded.mv(tempPath);                 // via express-fileupload
+
+    fs.copyFileSync(tempPath, DB_PATH);
+    await unlinkAsync(tempPath);
+
+    res.json({ ok: true, message: 'Backup eingespielt.' });
+  } catch (err) {
+    console.error('restoreBackup:', err);
+    res.status(500).json({ error: 'Restore Error' });
   }
 };
