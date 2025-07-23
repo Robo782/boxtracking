@@ -6,7 +6,7 @@ const path    = require("path");
 /* ─── Wo speichern? ───────────────────────────────────────── */
 
 const explicit = process.env.DB_FILE;          // kannst du in Render → Env vars setzen
-const diskDir  = "/data";                      // Default-Mount von Render-Disk
+const diskDir  = "/persistent"                      // Default-Mount von Render-Disk
 const hasDisk  = fs.existsSync(diskDir);
 const dir      = explicit ? path.dirname(explicit)
              : hasDisk   ? diskDir
