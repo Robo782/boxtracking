@@ -1,13 +1,13 @@
 #!/bin/sh
 set -e
 
-# -- nur root darf chown --
-if [ "$(id -u)" = "0" ]; then
+# ── 1) als root: Rechte auf das gemountete Render-Verzeichnis setzen ──────────
+if [ "$(id -u)" = 0 ]; then
   chown -R node:node /app/server/db 2>/dev/null || true
-  # wechsle auf den node-User und starte eigentliche App
-  exec su-exec node node server.js        # alpine images
-  # oder: exec gosu node node server.js    # debian-slim images
+
+  # ── 2) auf den unprivilegierten User wechseln & Server starten ──────────────
+  exec gosu node node server.js            # <- su-exec ➜ gosu
 fi
 
-# falls schon als node aufgerufen → einfach starten
+# falls Skript schon als node aufgerufen wurde:
 exec node server.js
