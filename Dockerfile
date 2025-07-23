@@ -1,38 +1,33 @@
 ###############################################################################
-# 1) Frontend-Build (Vite)                                                    #
+# 1) Frontend-Build (unverändert)                                             #
 ###############################################################################
 FROM node:18 AS client-build
-
 WORKDIR /app/client
-
-# 1. Nur package-Dateien kopieren
 COPY client/package*.json ./
-
-# 2. ALLE Abhängigkeiten installieren (inkl. devDependencies → Vite!)
-RUN npm ci                   #  ←  KEIN  --omit=dev
-
-# 3. Quellcode kopieren und Build ausführen
+RUN npm ci
 COPY client/. .
-RUN npm run build            # Vite erzeugt /app/client/dist
+RUN npm run build
 
 ###############################################################################
-# 2) Backend + fertiges Frontend                                              #
+# 2) Backend Layer                                                            #
 ###############################################################################
 FROM node:18
-
-# ---------- Backend vorbereiten ----------
 WORKDIR /app/server
+
+# --- Backend deps ---
 COPY server/package*.json ./
 RUN npm ci
 COPY server/. .
 
-# ---------- WICHTIG: Render-Disk beschreibbar machen ----------
-# Falls die Disk root:root gemountet wurde, erhält der node-User jetzt Rechte
-RUN mkdir -p /app/server/db && chown -R node:node /app/server/db
-
-# ---------- Vite-Build ins Backend kopieren ----------
+# --- Vite bundle ---
 COPY --from=client-build /app/client/dist ./static
 
-# ---------- Als node-User starten ----------
+# --- Entry-Script kopieren & ausführbar machen ---
+COPY server/docker-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# --- als node-User laufen ---
 USER node
-CMD ["node", "server.js"]
+
+# --- Start ---
+ENTRYPOINT ["sh", "/usr/local/bin/entrypoint.sh"]
