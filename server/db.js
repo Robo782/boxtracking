@@ -1,8 +1,10 @@
 // ------------------------------------------------------------
-//  Promise-Wrapper um better-sqlite3 + ein paar Convenience-Helfer
+//  Promise-Wrapper um better-sqlite3  +  Convenience-Helfer
+//  (inkl. automatischer Default-Admin-Erstellung)
 // ------------------------------------------------------------
 const path     = require("path");
 const fs       = require("fs");
+const bcrypt   = require("bcrypt");
 const Database = require("better-sqlite3");
 
 const DB_DIR  = process.env.DB_DIR  || path.join(__dirname, "db");
@@ -54,7 +56,24 @@ _db.exec(`
   );
 `);
 
-// 4) Promise-basierte Helfer
+/* ------------------------------------------------------------------
+   Default-Admin anlegen, falls noch kein User existiert
+------------------------------------------------------------------- */
+const { cnt: userCount } = _db.prepare(`SELECT COUNT(*) AS cnt FROM users`).get();
+
+if (userCount === 0) {
+  const hash = bcrypt.hashSync("admin", 10);
+  _db.prepare(`
+      INSERT INTO users (username, email, passwordHash, role)
+      VALUES ('admin', NULL, ?, 'admin')
+  `).run(hash);
+
+  console.warn("⚠︎ Default-Admin (admin / admin) angelegt");
+}
+
+/* ------------------------------------------------------------------
+   Promise-basierte Helfer
+------------------------------------------------------------------- */
 const get = (sql, params = []) =>
   Promise.resolve(_db.prepare(sql).get(params));
 
@@ -64,21 +83,23 @@ const all = (sql, params = []) =>
 const run = (sql, params = []) =>
   Promise.resolve(_db.prepare(sql).run(params));
 
-// 5) Export-API
+/* ------------------------------------------------------------------
+   Export-API
+------------------------------------------------------------------- */
 module.exports = {
-  /* Standard-Abfragen */
+  // Standard-Abfragen (Promises)
   get,
   all,
   run,
 
-  /* Convenience / direkte Zugriffe */
+  // Convenience / direkte Zugriffe
   exec    : (sql) => Promise.resolve(_db.exec(sql)),
   prepare : _db.prepare.bind(_db),
 
-  /* low-level Zugriff, falls man wirklich muss */
+  // Low-level Zugriff, falls man wirklich muss
   raw     : _db,
 
-  /* nützliche Pfade für andere Module (Backup, Restore, Tests …) */
+  // nützliche Pfade für andere Module (Backup, Restore …)
   DB_DIR,
   DB_FILE,
   DB_PATH
