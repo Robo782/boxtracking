@@ -27,6 +27,8 @@ app.use(express.static(path.join(__dirname, "static")));
 app.use("/api/auth",  authRoutes);
 app.use("/api/boxes", boxRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/backup", require("./routes/backupRoutes"));
+
 
 /* ─ SPA-Fallback ────────────────────────────────────────────
    Für alle nicht-API-Pfad­anfragen wird das Frontend zurückgegeben.

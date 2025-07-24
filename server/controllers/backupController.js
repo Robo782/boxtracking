@@ -1,21 +1,27 @@
-const fs   = require("fs");
+// ------------------------------------------------------------
+//  einfache Endpunkte für Backup & Restore
+// ------------------------------------------------------------
 const path = require("path");
-const db   = require("../db");                    // liefert auch DB_FILE
+const fs   = require("fs");
+const db   = require("../db");             // nur um an DB_PATH zu kommen
 
-/* ── Download: komplette SQLite-Datei ────────── */
-exports.backupDb = (_, res) => {
-  res.download(db.DB_FILE, path.basename(db.DB_FILE));
-};
+/**
+ * GET /api/backup/download
+ * Lädt die aktuelle Datenbank als Datei herunter.
+ */
+exports.download = (req, res) => {
+  const filePath = db.DB_PATH;             // absoluter Pfad zur DB-Datei
 
-/* ── Restore: hochgeladenes Backup einspielen ── */
-exports.restoreDb = (req, res) => {
-  if (!req.file) return res.status(400).send("file missing");
-
-  try {
-    fs.copyFileSync(req.file.path, db.DB_FILE);
-    res.json({ ok: true, message: "Backup eingespielt" });
-  } catch (e) {
-    console.error("Restore failed:", e.message);
-    res.status(500).json({ error: e.message });
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send("Datenbank-Datei nicht gefunden");
   }
+  // Dateiname, den der Browser anzeigen soll
+  const downloadName = "boxtracker.sqlite";
+
+  res.download(filePath, downloadName, (err) => {
+    if (err) {
+      console.error("❌ Fehler beim DB-Download:", err);
+      if (!res.headersSent) res.status(500).send("Interner Serverfehler");
+    }
+  });
 };

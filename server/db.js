@@ -1,6 +1,5 @@
-// server/db.js
 // ------------------------------------------------------------
-//  einfache Promise-Hülle um better-sqlite3
+//  Promise-Wrapper um better-sqlite3 + ein paar Convenience-Helfer
 // ------------------------------------------------------------
 const path     = require("path");
 const fs       = require("fs");
@@ -8,107 +7,79 @@ const Database = require("better-sqlite3");
 
 const DB_DIR  = process.env.DB_DIR  || path.join(__dirname, "db");
 const DB_FILE = process.env.DB_FILE || "data.sqlite";
+const DB_PATH = path.join(DB_DIR, DB_FILE);
 
-// 1) Verzeichnis sicherstellen  ───────────────────────────────
+// 1) Verzeichnis anlegen, falls nötig
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
-// 2) DB öffnen  ───────────────────────────────────────────────
-const db = new Database(path.join(DB_DIR, DB_FILE));
+// 2) Datenbank öffnen
+const _db = new Database(DB_PATH);
 
-// 3) PRAGMA-s & Tabellen (nur beim ersten Start wird angelegt) ─
-db.exec(`
+// 3) Basis-PRAGMAs & Tabellen – werden nur beim ersten Start angelegt
+_db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
 
   CREATE TABLE IF NOT EXISTS users (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      username      TEXT UNIQUE NOT NULL,
-      email         TEXT UNIQUE,
-      passwordHash  TEXT NOT NULL,
-      role          TEXT DEFAULT 'user'
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT UNIQUE NOT NULL,
+    email         TEXT UNIQUE,
+    passwordHash  TEXT NOT NULL,
+    role          TEXT DEFAULT 'user'
   );
 
   CREATE TABLE IF NOT EXISTS boxes (
-      id                INTEGER PRIMARY KEY AUTOINCREMENT,
-      serial            TEXT UNIQUE NOT NULL,
-      status            TEXT CHECK (status IN
-                           ('available','departed','returned','maintenance'))
-                           DEFAULT 'available',
-      cycles            INTEGER DEFAULT 0,
-      maintenance_count INTEGER DEFAULT 0,
-      device_serial     TEXT,
-      pcc_id            TEXT,
-      loaded_at         TEXT,
-      unloaded_at       TEXT,
-      checked_by        TEXT
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    serial            TEXT UNIQUE NOT NULL,
+    status            TEXT CHECK (status IN
+                     ('available','departed','returned','maintenance'))
+                     DEFAULT 'available',
+    cycles            INTEGER DEFAULT 0,
+    maintenance_count INTEGER DEFAULT 0,
+    device_serial     TEXT,
+    pcc_id            TEXT,
+    loaded_at         TEXT,
+    unloaded_at       TEXT,
+    checked_by        TEXT
   );
 
   CREATE TABLE IF NOT EXISTS box_history (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      box_id        INTEGER NOT NULL REFERENCES boxes(id) ON DELETE CASCADE,
-      device_serial TEXT,
-      pcc_id        TEXT,
-      loaded_at     TEXT,
-      unloaded_at   TEXT,
-      checked_by    TEXT
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    box_id        INTEGER NOT NULL REFERENCES boxes(id) ON DELETE CASCADE,
+    device_serial TEXT,
+    pcc_id        TEXT,
+    loaded_at     TEXT,
+    unloaded_at   TEXT,
+    checked_by    TEXT
   );
 `);
 
-// 4) Default-Admin anlegen (einmalig)  ─────────────────────────
-(() => {
-  const { cnt } = db.prepare("SELECT COUNT(*) AS cnt FROM users").get();
-  if (cnt === 0) {
-    const bcrypt = require("bcrypt");
-    const hash   = bcrypt.hashSync("admin", 10);      // Passwort: admin
-    db.prepare(`
-      INSERT INTO users (username, email, passwordHash, role)
-      VALUES ('admin', 'admin@example.com', ?, 'admin')
-    `).run(hash);
-    console.log("⚠︎ Default-Admin (admin / admin) angelegt");
-  }
-})();
+// 4) Promise-basierte Helfer
+const get = (sql, params = []) =>
+  Promise.resolve(_db.prepare(sql).get(params));
 
-// 5) Promise-Wrapper  ─────────────────────────────────────────
-function wrap(fn) {
-  return (...args) =>
-    new Promise((resolve, reject) => {
-      try {
-        resolve(db[fn](...args));
-      } catch (err) {
-        reject(err);
-      }
-    });
-}
+const all = (sql, params = []) =>
+  Promise.resolve(_db.prepare(sql).all(params));
 
-// 6) Export-API  ──────────────────────────────────────────────
+const run = (sql, params = []) =>
+  Promise.resolve(_db.prepare(sql).run(params));
+
+// 5) Export-API
 module.exports = {
-  /* Standard-Aufrufe als Promise */
-  /** 1 Zeile – einen Datensatz holen                                */
-  get: (sql, ...params) =>
-    new Promise((res, rej) => {
-      try   { res(db.prepare(sql).get(...params)); }
-      catch (e) { rej(e); }
-    }),
+  /* Standard-Abfragen */
+  get,
+  all,
+  run,
 
-  /** Mehrere Datensätze holen                                       */
-  all: (sql, ...params) =>
-    new Promise((res, rej) => {
-      try   { res(db.prepare(sql).all(...params)); }
-      catch (e) { rej(e); }
-    }),
+  /* Convenience / direkte Zugriffe */
+  exec    : (sql) => Promise.resolve(_db.exec(sql)),
+  prepare : _db.prepare.bind(_db),
 
-  /** INSERT / UPDATE / DELETE                                       */
-  run: (sql, ...params) =>
-    new Promise((res, rej) => {
-      try   { res(db.prepare(sql).run(...params)); }
-      catch (e) { rej(e); }
-    }),
+  /* low-level Zugriff, falls man wirklich muss */
+  raw     : _db,
 
-  /* Convenience */
-  exec    : (sql)        => Promise.resolve(db.exec(sql)),
-  prepare : (...args)    => db.prepare(...args),
-
-  /* direkter Zugriff (falls nötig) */
-  raw     : db
+  /* nützliche Pfade für andere Module (Backup, Restore, Tests …) */
+  DB_DIR,
+  DB_FILE,
+  DB_PATH
 };
-
