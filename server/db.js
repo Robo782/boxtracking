@@ -1,6 +1,6 @@
 // ------------------------------------------------------------
 //  Promise-Wrapper um better-sqlite3  +  Convenience-Helfer
-//  (inkl. automatischer Default-Admin-Erstellung)
+//  (inkl. Default-Admin ‘admin / admin’)
 // ------------------------------------------------------------
 const path     = require("path");
 const fs       = require("fs");
@@ -14,10 +14,10 @@ const DB_PATH = path.join(DB_DIR, DB_FILE);
 // 1) Verzeichnis anlegen, falls nötig
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
-// 2) Datenbank öffnen
+// 2) DB öffnen
 const _db = new Database(DB_PATH);
 
-// 3) Basis-PRAGMAs & Tabellen – werden nur beim ersten Start angelegt
+// 3) PRAGMAs + Tabellen (nur beim ersten Start angelegt)
 _db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
@@ -56,50 +56,39 @@ _db.exec(`
   );
 `);
 
-/* ------------------------------------------------------------------
-   Default-Admin anlegen, falls noch kein User existiert
-------------------------------------------------------------------- */
-const { cnt: userCount } = _db.prepare(`SELECT COUNT(*) AS cnt FROM users`).get();
-
-if (userCount === 0) {
+/* ───────── Default-Admin (nur bei leerer User-Tabelle) ───────── */
+const { cnt } = _db.prepare(`SELECT COUNT(*) AS cnt FROM users`).get();
+if (cnt === 0) {
   const hash = bcrypt.hashSync("admin", 10);
   _db.prepare(`
       INSERT INTO users (username, email, passwordHash, role)
       VALUES ('admin', NULL, ?, 'admin')
   `).run(hash);
-
   console.warn("⚠︎ Default-Admin (admin / admin) angelegt");
 }
 
-/* ------------------------------------------------------------------
-   Promise-basierte Helfer
-------------------------------------------------------------------- */
-const get = (sql, params = []) =>
-  Promise.resolve(_db.prepare(sql).get(params));
+/* ───────── Promise-Helper (korrekte Parameter-Übergabe!) ─────── */
+function execStmt(method, sql, params = []) {
+  const stmt = _db.prepare(sql);
+  // Array-Parameter → spreaden, Objekt / undefined → direkt
+  if (Array.isArray(params)) return stmt[method](...params);
+  return stmt[method](params);
+}
 
-const all = (sql, params = []) =>
-  Promise.resolve(_db.prepare(sql).all(params));
+const get = (sql, params) => Promise.resolve(execStmt("get",  sql, params));
+const all = (sql, params) => Promise.resolve(execStmt("all",  sql, params));
+const run = (sql, params) => Promise.resolve(execStmt("run",  sql, params));
 
-const run = (sql, params = []) =>
-  Promise.resolve(_db.prepare(sql).run(params));
-
-/* ------------------------------------------------------------------
-   Export-API
-------------------------------------------------------------------- */
+/* ───────── Export-API ───────── */
 module.exports = {
-  // Standard-Abfragen (Promises)
   get,
   all,
   run,
 
-  // Convenience / direkte Zugriffe
   exec    : (sql) => Promise.resolve(_db.exec(sql)),
   prepare : _db.prepare.bind(_db),
-
-  // Low-level Zugriff, falls man wirklich muss
   raw     : _db,
 
-  // nützliche Pfade für andere Module (Backup, Restore …)
   DB_DIR,
   DB_FILE,
   DB_PATH
