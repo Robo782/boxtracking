@@ -83,14 +83,32 @@ function wrap(fn) {
 // 6) Export-API  ──────────────────────────────────────────────
 module.exports = {
   /* Standard-Aufrufe als Promise */
-  get : (...args) => wrap("prepare")(...args).then(st => st.get()),
-  all : (...args) => wrap("prepare")(...args).then(st => st.all()),
-  run : (...args) => wrap("prepare")(...args).then(st => st.run()),
+  /** 1 Zeile – einen Datensatz holen                                */
+  get: (sql, ...params) =>
+    new Promise((res, rej) => {
+      try   { res(db.prepare(sql).get(...params)); }
+      catch (e) { rej(e); }
+    }),
+
+  /** Mehrere Datensätze holen                                       */
+  all: (sql, ...params) =>
+    new Promise((res, rej) => {
+      try   { res(db.prepare(sql).all(...params)); }
+      catch (e) { rej(e); }
+    }),
+
+  /** INSERT / UPDATE / DELETE                                       */
+  run: (sql, ...params) =>
+    new Promise((res, rej) => {
+      try   { res(db.prepare(sql).run(...params)); }
+      catch (e) { rej(e); }
+    }),
 
   /* Convenience */
-  exec    : (sql) => Promise.resolve(db.exec(sql)),
-  prepare : db.prepare.bind(db),
+  exec    : (sql)        => Promise.resolve(db.exec(sql)),
+  prepare : (...args)    => db.prepare(...args),
 
-  /* direkter Zugriff */
-  raw  : db
+  /* direkter Zugriff (falls nötig) */
+  raw     : db
 };
+
