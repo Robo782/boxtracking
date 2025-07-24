@@ -76,9 +76,10 @@ const promisify =
     });
 
 module.exports = {
-  get  : promisify('get'),
-  all  : promisify('all'),
-  run  : promisify('run'),
-  exec : (sql) => Promise.resolve(db.exec(sql)),   // selten nötig
-  raw  : db                                         // direkter Zugriff
+  get  : promisify("get"),
+  all  : promisify("all"),
+  run  : promisify("run"),
+  exec : (sql) => Promise.resolve(_db.exec(sql)),
+  raw  : _db,                 // direkter Zugriff
+  prepare : _db.prepare.bind(_db)   // <- neu, falls irgendwo direkt benutzt
 };
