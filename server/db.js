@@ -15,7 +15,7 @@ if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 // 2) DB öffnen  ───────────────────────────────────────────────
 const db = new Database(path.join(DB_DIR, DB_FILE));
 
-// 3) PRAGMA-s & Tabellen (nur beim ersten Start wird wirklich angelegt)
+// 3) PRAGMA-s & Tabellen (nur beim ersten Start wird angelegt) ─
 db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
@@ -54,7 +54,21 @@ db.exec(`
   );
 `);
 
-// 4) Promise-Wrapper  ────────────────────────────────────────
+// 4) Default-Admin anlegen (einmalig)  ─────────────────────────
+(() => {
+  const { cnt } = db.prepare("SELECT COUNT(*) AS cnt FROM users").get();
+  if (cnt === 0) {
+    const bcrypt = require("bcrypt");
+    const hash   = bcrypt.hashSync("admin", 10);      // Passwort: admin
+    db.prepare(`
+      INSERT INTO users (username, email, passwordHash, role)
+      VALUES ('admin', 'admin@example.com', ?, 'admin')
+    `).run(hash);
+    console.log("⚠︎ Default-Admin (admin / admin) angelegt");
+  }
+})();
+
+// 5) Promise-Wrapper  ─────────────────────────────────────────
 function wrap(fn) {
   return (...args) =>
     new Promise((resolve, reject) => {
@@ -66,10 +80,10 @@ function wrap(fn) {
     });
 }
 
-// 5) Export-API  ──────────────────────────────────────────────
+// 6) Export-API  ──────────────────────────────────────────────
 module.exports = {
   /* Standard-Aufrufe als Promise */
-  get : wrap("prepare"),      // liefert Statement  → meist .get() nutzen
+  get : (...args) => wrap("prepare")(...args).then(st => st.get()),
   all : (...args) => wrap("prepare")(...args).then(st => st.all()),
   run : (...args) => wrap("prepare")(...args).then(st => st.run()),
 
@@ -77,6 +91,6 @@ module.exports = {
   exec    : (sql) => Promise.resolve(db.exec(sql)),
   prepare : db.prepare.bind(db),
 
-  /* falls du doch mal direkt zugreifen willst */
-  raw : db
+  /* direkter Zugriff */
+  raw  : db
 };

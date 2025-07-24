@@ -30,11 +30,13 @@ exports.login = async (req, res) => {
       loginId
     );
 
-    if (!user) {
-      return res.status(401).json({ error: "Ungültige Zugangsdaten" });
-    }
+if (!user || !user.passwordHash) {
+  return res.status(401).json({ error: "Ungültige Zugangsdaten" });
+}
 
-    const match = await bcrypt.compare(password, user.passwordHash);
+// Passwort prüfen
+const match = await bcrypt.compare(password, user.passwordHash);
+
     if (!match) {
       return res.status(401).json({ error: "Ungültige Zugangsdaten" });
     }
