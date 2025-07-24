@@ -1,29 +1,23 @@
 // server/db.js
-//
-// zentrale SQLite-Instanz + Promise-Wrapper
-// ──────────────────────────────────────────────────────────────
+// ------------------------------------------------------------
+//  einfache Promise-Hülle um better-sqlite3
+// ------------------------------------------------------------
+const path     = require("path");
+const fs       = require("fs");
+const Database = require("better-sqlite3");
 
-const path     = require('node:path');
-const fs       = require('node:fs');
-const Database = require('better-sqlite3');
+const DB_DIR  = process.env.DB_DIR  || path.join(__dirname, "db");
+const DB_FILE = process.env.DB_FILE || "data.sqlite";
 
-// ---------------------------------------------------------------------------
-// 1) DB-Datei anlegen / öffnen
-// ---------------------------------------------------------------------------
-const DB_DIR  = path.join(__dirname, 'db');
-const DB_FILE = path.join(DB_DIR, 'boxtracker.sqlite');
-
+// 1) Verzeichnis sicherstellen  ───────────────────────────────
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
-const db = new Database(DB_FILE, { verbose: console.log });
+// 2) DB öffnen  ───────────────────────────────────────────────
+const db = new Database(path.join(DB_DIR, DB_FILE));
 
-// WAL = besseres Concurrency-Handling
-db.pragma('journal_mode = WAL');
-
-// ---------------------------------------------------------------------------
-// 2) Schema (nur angelegt, wenn noch nicht vorhanden)
-// ---------------------------------------------------------------------------
+// 3) PRAGMA-s & Tabellen (nur beim ersten Start wird wirklich angelegt)
 db.exec(`
+  PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
 
   CREATE TABLE IF NOT EXISTS users (
@@ -38,8 +32,8 @@ db.exec(`
       id                INTEGER PRIMARY KEY AUTOINCREMENT,
       serial            TEXT UNIQUE NOT NULL,
       status            TEXT CHECK (status IN
-                       ('available','departed','returned','maintenance'))
-                       DEFAULT 'available',
+                           ('available','departed','returned','maintenance'))
+                           DEFAULT 'available',
       cycles            INTEGER DEFAULT 0,
       maintenance_count INTEGER DEFAULT 0,
       device_serial     TEXT,
@@ -60,26 +54,29 @@ db.exec(`
   );
 `);
 
-// ---------------------------------------------------------------------------
-// 3) Promise-Wrapper, damit wir überall `await db.get(...)` nutzen können
-// ---------------------------------------------------------------------------
-const promisify =
-  (method) => (sql, ...params) =>
+// 4) Promise-Wrapper  ────────────────────────────────────────
+function wrap(fn) {
+  return (...args) =>
     new Promise((resolve, reject) => {
       try {
-        const stmt  = db.prepare(sql);
-        const value = stmt[method](...params);
-        resolve(value);
+        resolve(db[fn](...args));
       } catch (err) {
         reject(err);
       }
     });
+}
 
+// 5) Export-API  ──────────────────────────────────────────────
 module.exports = {
-  get  : promisify("get"),
-  all  : promisify("all"),
-  run  : promisify("run"),
-  exec : (sql) => Promise.resolve(_db.exec(sql)),
-  raw  : _db,                 // direkter Zugriff
-  prepare : _db.prepare.bind(_db)   // <- neu, falls irgendwo direkt benutzt
+  /* Standard-Aufrufe als Promise */
+  get : wrap("prepare"),      // liefert Statement  → meist .get() nutzen
+  all : (...args) => wrap("prepare")(...args).then(st => st.all()),
+  run : (...args) => wrap("prepare")(...args).then(st => st.run()),
+
+  /* Convenience */
+  exec    : (sql) => Promise.resolve(db.exec(sql)),
+  prepare : db.prepare.bind(db),
+
+  /* falls du doch mal direkt zugreifen willst */
+  raw : db
 };
