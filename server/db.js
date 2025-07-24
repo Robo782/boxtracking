@@ -1,6 +1,6 @@
 // ------------------------------------------------------------
-//  Promise-Wrapper um better-sqlite3  +  Convenience-Helfer
-//  (inkl. Default-Admin ‘admin / admin’)
+//  Promise‑Wrapper um better‑sqlite3  +  Convenience‑Helfer
+//  (legt bei leerer DB einen Default‑Admin ‘admin / admin’ an)
 // ------------------------------------------------------------
 const path     = require("path");
 const fs       = require("fs");
@@ -11,13 +11,13 @@ const DB_DIR  = process.env.DB_DIR  || path.join(__dirname, "db");
 const DB_FILE = process.env.DB_FILE || "data.sqlite";
 const DB_PATH = path.join(DB_DIR, DB_FILE);
 
-// 1) Verzeichnis anlegen, falls nötig
+// 1) DB‑Verzeichnis sicherstellen
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
 // 2) DB öffnen
 const _db = new Database(DB_PATH);
 
-// 3) PRAGMAs + Tabellen (nur beim ersten Start angelegt)
+// 3) Basis‑PRAGMAs & Tabellen (nur beim ersten Start wirklich angelegt)
 _db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
@@ -33,9 +33,9 @@ _db.exec(`
   CREATE TABLE IF NOT EXISTS boxes (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     serial            TEXT UNIQUE NOT NULL,
-    status            TEXT CHECK (status IN
-                     ('available','departed','returned','maintenance'))
-                     DEFAULT 'available',
+    status            TEXT CHECK (
+                     status IN ('available','departed','returned','maintenance')
+                   ) DEFAULT 'available',
     cycles            INTEGER DEFAULT 0,
     maintenance_count INTEGER DEFAULT 0,
     device_serial     TEXT,
@@ -56,7 +56,7 @@ _db.exec(`
   );
 `);
 
-/* ───────── Default-Admin (nur bei leerer User-Tabelle) ───────── */
+/* ───────── Default‑Admin bei leerer User‑Tabelle ───────── */
 const { cnt } = _db.prepare(`SELECT COUNT(*) AS cnt FROM users`).get();
 if (cnt === 0) {
   const hash = bcrypt.hashSync("admin", 10);
@@ -64,14 +64,26 @@ if (cnt === 0) {
       INSERT INTO users (username, email, passwordHash, role)
       VALUES ('admin', NULL, ?, 'admin')
   `).run(hash);
-  console.warn("⚠︎ Default-Admin (admin / admin) angelegt");
+  console.warn("⚠︎ Default‑Admin (admin / admin) angelegt");
 }
 
-/* ───────── Promise-Helper (korrekte Parameter-Übergabe!) ─────── */
-function execStmt(method, sql, params = []) {
+/* ───────── Promise‑Helper mit sauberer Parameter‑Übergabe ───────── */
+function execStmt(method, sql, params) {
   const stmt = _db.prepare(sql);
-  // Array-Parameter → spreaden, Objekt / undefined → direkt
+
+  // 0) keine Platzhalter im SQL  →  einfach ohne Argumente aufrufen
+  if (!sql.includes("?")) return stmt[method]();
+
+  // 1) Keine params übergeben
+  if (params === undefined || params === null) return stmt[method]();
+
+  // 2) Leeres Array → auch ohne Argumente
+  if (Array.isArray(params) && params.length === 0) return stmt[method]();
+
+  // 3) Array mit Werten → spreaden
   if (Array.isArray(params)) return stmt[method](...params);
+
+  // 4) Einzelwert oder Objekt → direkt
   return stmt[method](params);
 }
 
@@ -79,7 +91,7 @@ const get = (sql, params) => Promise.resolve(execStmt("get",  sql, params));
 const all = (sql, params) => Promise.resolve(execStmt("all",  sql, params));
 const run = (sql, params) => Promise.resolve(execStmt("run",  sql, params));
 
-/* ───────── Export-API ───────── */
+/* ───────── Export‑API ───────── */
 module.exports = {
   get,
   all,
@@ -87,7 +99,7 @@ module.exports = {
 
   exec    : (sql) => Promise.resolve(_db.exec(sql)),
   prepare : _db.prepare.bind(_db),
-  raw     : _db,
+  raw     : _db,                 // Low‑level Zugriff (falls nötig)
 
   DB_DIR,
   DB_FILE,
