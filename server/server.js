@@ -1,44 +1,64 @@
-/**
- * Haupteinstiegspunkt Backend
- */
-require("dotenv").config();
-const path        = require("path");
-const express     = require("express");
-const morgan      = require("morgan");
-const cors        = require("cors");
-const fileUpload  = require("express-fileupload");
+// server/server.js  – Backend + React-Bundle
+// ───────────────────────────────────────────────────────────────
+const express = require("express");
+const cors    = require("cors");
+const path    = require("path");
+const fs      = require("fs");
+const multer  = require("multer");
+const bcrypt  = require("bcrypt");
+const db      = require("./db");              // better-sqlite3 Wrapper
 
-const authRoutes  = require("./routes/authRoutes");
-const boxRoutes   = require("./routes/boxRoutes");
-const adminRoutes = require("./routes/adminRoutes");
+const { DB_PATH, DB_FILE } = db;              // kommt aus db.js
+const app  = express();
+const PORT = process.env.PORT || 5000;
 
-const app = express();
-
-/* ─ middlewares ───────────────────────────────────────────── */
+/* ─── Basis-Middleware ───────────────────────────────────────── */
 app.use(cors());
-app.use(morgan("dev"));
 app.use(express.json());
-app.use(fileUpload());                    // Datei-Uploads
 
-// **Static Files** – ohne Präfix, damit /, /favicon.ico, /assets/* usw. funktionieren
-app.use(express.static(path.join(__dirname, "static")));
+/* ─── 1) OFFENE ADMIN-ROUTE zum Download  ───────────────────── */
+//  GET  /admin/backup  →  SQLite direkt streamen
+app.get("/admin/backup", (req, res) => {
+  fs.access(DB_PATH, fs.constants.R_OK, err => {
+    if (err) {
+      console.error("[backup] DB fehlt:", err);
+      return res.status(404).json({ message: "Datenbank nicht gefunden" });
+    }
+    res.setHeader("Content-Type",      "application/octet-stream");
+    res.setHeader("Content-Disposition",
+                  `attachment; filename="${DB_FILE}"`);
+    fs.createReadStream(DB_PATH).pipe(res);
+  });
+});
 
-/* ─ API-Routen ────────────────────────────────────────────── */
-app.use("/api/auth",  authRoutes);
-app.use("/api/boxes", boxRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/backup", require("./routes/backupRoutes"));
+/* ─── 2) GESCHÜTZTE ADMIN-API (Stats, ZIP-Backup, Restore …) ─ */
+app.use("/api/admin", require("./routes/adminRoutes"));
 
+/* ─── 3) RESTLICHE API-ROUTEN ───────────────────────────────── */
+app.use("/api/auth",  require("./routes/authRoutes"));
+app.use("/api/boxes", require("./routes/boxRoutes"));
 
-/* ─ SPA-Fallback ────────────────────────────────────────────
-   Für alle nicht-API-Pfad­anfragen wird das Frontend zurückgegeben.
-   So funktionieren Hard-Refreshes und Direktaufrufe beliebiger Routen. */
+/* ─── 4) React-Build ausliefern ─────────────────────────────── */
+const staticDir = path.join(__dirname, "static");  // via Docker COPY
+app.use(express.static(staticDir));
+
+/* SPA-Fallback für React Router */
 app.get("*", (_req, res) =>
-  res.sendFile(path.join(__dirname, "static", "index.html"))
+  res.sendFile(path.join(staticDir, "index.html"))
 );
 
-/* ─ Start ─────────────────────────────────────────────────── */
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () =>
-  console.log(`[INFO] Backend läuft auf Port ${PORT}`)
-);
+/* ─── 5) Serverstart + einmaliges Admin-Seeding ─────────────── */
+app.listen(PORT, () => {
+  console.log(`[INFO] Backend on :${PORT}  |  DB → ${DB_PATH}`);
+  // default admin anlegen, falls nicht vorhanden
+  const row = db.raw.prepare(
+    "SELECT 1 FROM users WHERE username = 'admin'"
+  ).get();
+  if (!row) {
+    const hash = bcrypt.hashSync("admin", 10);
+    db.raw.prepare(
+      "INSERT INTO users (username,passwordHash,role) VALUES ('admin',?, 'admin')"
+    ).run(hash);
+    console.warn("[INFO] Default-Admin (admin/admin) erzeugt");
+  }
+});
