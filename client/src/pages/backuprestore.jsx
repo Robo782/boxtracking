@@ -1,66 +1,81 @@
-import { useState } from "react";
-import api from "../utils/api.js";
+// client/src/pages/BackupRestore.jsx
+import React from "react";
+import { useNavigate } from "react-router-dom";
+
+// Herkunft des Back-Ends:  ▪ im Dev via VITE_BACKEND_URL  ▪ sonst Port-Fallback
+const API_ORIGIN =
+  import.meta.env.VITE_BACKEND_URL ||
+  window.location.origin.replace(/3000$/, "5000");
 
 export default function BackupRestore() {
-  const [msg, setMsg] = useState("");
+  const navigate = useNavigate();
 
-  /* Hilfs-POST mit Meldung */
-  const post = (url, body) =>
-    api
-      .post(url, body)
-      .then((r) => setMsg(r.message || "OK"))
-      .catch((e) => setMsg(e.message));
+  /* -------------- Aktionen ----------------------------------- */
+  const handleDownload = () => {
+    // Absolute URL → React Router interceptet NICHT → echter File-Download
+    window.location.href = `${API_ORIGIN}/admin/backup`;
+  };
 
+  const handleRestore = async (e) => {
+    e.preventDefault();
+    const file = e.target.elements.file?.files[0];
+    if (!file) return alert("Bitte Datei auswählen");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res   = await fetch(`${API_ORIGIN}/admin/restore`, {
+      method: "POST",
+      body:   formData,
+    });
+    const json  = await res.json();
+    alert(json.message || "Fertig");
+  };
+
+  /* -------------- UI ----------------------------------------- */
   return (
-    <main className="p-4 flex flex-col gap-6 max-w-lg">
-      <h1 className="text-2xl font-semibold">Backup&nbsp;&amp;&nbsp;Daten-Tools</h1>
+    <div className="max-w-xl mx-auto p-6 space-y-8">
+      <h1 className="text-3xl font-bold">Backup&nbsp;&amp;&nbsp;Restore</h1>
 
-      {/* ─── Backup / Restore ───────────────────── */}
-      <section className="border rounded p-4 flex flex-col gap-3">
-        <h2 className="font-semibold">Backup</h2>
+      {/* Download */}
+      <button
+        onClick={handleDownload}
+        className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+      >
+        Datenbank&nbsp;herunterladen
+      </button>
 
-        {/* Download –  KEIN doppeltes /api  */}
-        <a href="/admin/backup" className="btn btn-sm btn-outline">
-          Datenbank herunterladen
-        </a>
-
-        {/* Upload */}
-        <label className="flex flex-col gap-2">
-          <span>Datenbank hochladen</span>
+      {/* Restore */}
+      <form onSubmit={handleRestore} className="space-y-4">
+        <label className="block">
+          <span className="text-gray-700">SQLite-Datei auswählen</span>
           <input
             type="file"
-            className="file-input file-input-bordered file-input-sm"
-            onChange={(e) => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const form = new FormData();
-              form.append("file", file);
-              post("/admin/restore", form); //  ← nur /admin/restore
-            }}
+            name="file"
+            accept=".db"
+            className="mt-2 block w-full text-sm text-gray-900
+                       file:mr-4 file:py-2 file:px-4
+                       file:rounded file:border-0
+                       file:text-sm file:font-semibold
+                       file:bg-blue-50 file:text-blue-700
+                       hover:file:bg-blue-100"
           />
         </label>
-      </section>
-
-      {/* ─── Reset / Init ───────────────────────── */}
-      <section className="border rounded p-4 flex flex-col gap-3">
-        <h2 className="font-semibold">Daten-Werkzeuge</h2>
 
         <button
-  className="btn btn-sm btn-warning"
-  onClick={() => post("/admin/reset-data")}
->
-  Box-Daten zurücksetzen
-</button>
+          type="submit"
+          className="rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+        >
+          Datenbank&nbsp;wiederherstellen
+        </button>
+      </form>
 
-<button
-  className="btn btn-sm btn-primary"
-  onClick={() => post("/admin/init-data")}
->
-  Demo-Boxen erzeugen
-</button>
-      </section>
-
-      {msg && <p className="text-green-600">{msg}</p>}
-    </main>
+      <button
+        onClick={() => navigate("/boxes")}
+        className="text-blue-600 underline"
+      >
+        Zurück zur Übersicht
+      </button>
+    </div>
   );
 }
