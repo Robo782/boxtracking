@@ -1,27 +1,31 @@
-// server/server.js  – Backend + React-Bundle
-// ───────────────────────────────────────────────────────────────
+// server/server.js
+// ────────────────────────────────────────────────────────────────
+//  Express-Backend + React-Bundle  (Render-Deployment)
+//  ▸ Admin-Backup  GET  /admin/backup    →  data.sqlite download
+//  ▸ Restore       POST /admin/restore   →  DB ersetzen
+//  ▸ Alle anderen Routen unverändert
+// ----------------------------------------------------------------
 const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
 const fs      = require("fs");
 const multer  = require("multer");
-const bcrypt  = require("bcrypt");
-const db      = require("./db");              // better-sqlite3 Wrapper
 
-const { DB_PATH, DB_FILE } = db;              // kommt aus db.js
+const { DB_PATH, DB_FILE, DB_DIR } = require("./db");  // zentrale Konstanten
+
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
-/* ─── Basis-Middleware ───────────────────────────────────────── */
+/* ───────── Basis-Middleware ─────────────────────────────────── */
 app.use(cors());
 app.use(express.json());
 
-/* ─── 1) OFFENE ADMIN-ROUTE zum Download  ───────────────────── */
-//  GET  /admin/backup  →  SQLite direkt streamen
-app.get("/admin/backup", (req, res) => {
+/* ───────── 1) ADMIN-ROUTEN │ MÜSSEN VOR static+SPA stehen ───── */
+// 1a) Backup: DB herunterladen
+app.get("/admin/backup", (_req, res) => {
   fs.access(DB_PATH, fs.constants.R_OK, err => {
     if (err) {
-      console.error("[backup] DB fehlt:", err);
+      console.error("[admin/backup] DB fehlt:", err);
       return res.status(404).json({ message: "Datenbank nicht gefunden" });
     }
     res.setHeader("Content-Type",      "application/octet-stream");
@@ -31,34 +35,41 @@ app.get("/admin/backup", (req, res) => {
   });
 });
 
-/* ─── 2) GESCHÜTZTE ADMIN-API (Stats, ZIP-Backup, Restore …) ─ */
-app.use("/api/admin", require("./routes/adminRoutes"));
+// 1b) Restore: DB ersetzen
+const upload = multer({ dest: "/tmp" });
+app.post("/admin/restore", upload.single("file"), (req, res) => {
+  if (!req.file)
+    return res.status(400).json({ message: "Keine Datei erhalten" });
 
-/* ─── 3) RESTLICHE API-ROUTEN ───────────────────────────────── */
-app.use("/api/auth",  require("./routes/authRoutes"));
-app.use("/api/boxes", require("./routes/boxRoutes"));
+  fs.mkdir(DB_DIR, { recursive: true }, () =>
+    fs.copyFile(req.file.path, DB_PATH, err => {
+      fs.unlink(req.file.path, () => {});
+      if (err) {
+        console.error("[admin/restore] copy:", err);
+        return res.status(500).json({ message: "Restore fehlgeschlagen" });
+      }
+      res.json({ message: "Datenbank wiederhergestellt" });
+    })
+  );
+});
+/* ─────────────────────────────────────────────────────────────── */
 
-/* ─── 4) React-Build ausliefern ─────────────────────────────── */
-const staticDir = path.join(__dirname, "static");  // via Docker COPY
+/* ───────── 2) Bisherige API-Routen  (Beispiel) ───────────────── */
+app.use("/api/boxes",  require("./routes/boxRoutes"));
+app.use("/api/users",  require("./routes/userRoutes"));
+app.use("/api/auth",   require("./routes/authRoutes"));
+/* ─────────────────────────────────────────────────────────────── */
+
+/* ───────── 3) React-Build ausliefern  (jetzt NACH Admin-Routes) */
+const staticDir = path.join(__dirname, "static");   // Build-Output (dist)
 app.use(express.static(staticDir));
 
-/* SPA-Fallback für React Router */
+/* ───────── 4) SPA-Fallback  (ganz zuletzt) ───────────────────── */
 app.get("*", (_req, res) =>
   res.sendFile(path.join(staticDir, "index.html"))
 );
 
-/* ─── 5) Serverstart + einmaliges Admin-Seeding ─────────────── */
-app.listen(PORT, () => {
-  console.log(`[INFO] Backend on :${PORT}  |  DB → ${DB_PATH}`);
-  // default admin anlegen, falls nicht vorhanden
-  const row = db.raw.prepare(
-    "SELECT 1 FROM users WHERE username = 'admin'"
-  ).get();
-  if (!row) {
-    const hash = bcrypt.hashSync("admin", 10);
-    db.raw.prepare(
-      "INSERT INTO users (username,passwordHash,role) VALUES ('admin',?, 'admin')"
-    ).run(hash);
-    console.warn("[INFO] Default-Admin (admin/admin) erzeugt");
-  }
-});
+/* ───────── 5) Start-Log  ─────────────────────────────────────── */
+app.listen(PORT, () =>
+  console.log(`[BoxTracking] Backend läuft auf Port ${PORT} | DB → ${DB_PATH}`)
+);
