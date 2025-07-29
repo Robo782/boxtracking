@@ -1,7 +1,7 @@
 // server/db.js
-// ───────────────────────────────────────────────────────────────────────────
-//  better-sqlite3-Wrapper  +  garantiert idempotenten Default-Admin
-// ───────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+//  better-sqlite3-Wrapper  +  idempotente Admin-Reparatur
+// ──────────────────────────────────────────────────────────────
 const path     = require("path");
 const fs       = require("fs");
 const bcrypt   = require("bcrypt");
@@ -11,13 +11,10 @@ const DB_DIR  = process.env.DB_DIR  || path.join(__dirname, "db");
 const DB_FILE = process.env.DB_FILE || "data.sqlite";
 const DB_PATH = path.join(DB_DIR, DB_FILE);
 
-// Verzeichnis anlegen, falls nötig
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-
-// DB öffnen
 const _db = new Database(DB_PATH);
 
-// Grund-PRAGMAs + Tabellen
+/* ─── Grund-PRAGMAs & Tabellen ─────────────────────────────── */
 _db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
@@ -56,46 +53,48 @@ _db.exec(`
   );
 `);
 
-/* ───── sicherstellen, dass ein funktionierender Admin vorhanden ist ───── */
-const admin = _db.prepare(`
-  SELECT passwordHash FROM users WHERE username = 'admin' LIMIT 1
-`).get();
+/* ─── Admin-Sicherung ──────────────────────────────────────── */
+function ensureAdmin() {
+  const admin = _db.prepare(`
+      SELECT passwordHash
+        FROM users
+       WHERE username='admin'
+       LIMIT 1
+  `).get();
 
-if (!admin || !admin.passwordHash) {
+  if (admin && admin.passwordHash) return;      // schon OK
+
   const hash = bcrypt.hashSync("admin", 10);
-
   if (admin) {
     _db.prepare(`
-      UPDATE users SET passwordHash=? WHERE username='admin'
+        UPDATE users SET passwordHash=? WHERE username='admin'
     `).run(hash);
   } else {
     _db.prepare(`
-      INSERT INTO users (username,email,passwordHash,role)
-      VALUES ('admin','admin@example.com',?, 'admin')
+        INSERT INTO users (username,email,passwordHash,role)
+        VALUES ('admin','admin@example.com',?, 'admin')
     `).run(hash);
   }
-  console.warn("⚠︎ Default-Admin (admin / admin) angelegt bzw. repariert");
+  console.warn("⚠︎ Default-Admin (admin / admin) angelegt bzw. Hash repariert");
 }
+ensureAdmin();
 
-/* ───── kleine Promise-Helfer ───── */
-function execStmt(method, sql, params) {
-  const stmt = _db.prepare(sql);
-  if (!sql.includes("?"))                     return stmt[method]();
-  if (params === undefined || params === null) return stmt[method]();
-  if (Array.isArray(params) && !params.length) return stmt[method]();
-  return Array.isArray(params)
-    ? stmt[method](...params)
-    : stmt[method](params);
+/* ─── kleine Promise-Wrapper ───────────────────────────────── */
+function execStmt(method, sql, p) {
+  const s = _db.prepare(sql);
+  if (!sql.includes("?"))                     return s[method]();
+  if (p == null || (Array.isArray(p) && !p.length)) return s[method]();
+  return Array.isArray(p) ? s[method](...p) : s[method](p);
 }
-
-const get = (sql,p)=>Promise.resolve(execStmt("get",sql,p));
-const all = (sql,p)=>Promise.resolve(execStmt("all",sql,p));
-const run = (sql,p)=>Promise.resolve(execStmt("run",sql,p));
+const get = (q,p)=>Promise.resolve(execStmt("get", q,p));
+const all = (q,p)=>Promise.resolve(execStmt("all",q,p));
+const run = (q,p)=>Promise.resolve(execStmt("run",q,p));
 
 module.exports = {
   get, all, run,
-  exec   : (sql)=>Promise.resolve(_db.exec(sql)),
+  exec   : (q)=>Promise.resolve(_db.exec(q)),
   prepare: _db.prepare.bind(_db),
   raw    : _db,
+  ensureAdmin,
   DB_DIR, DB_FILE, DB_PATH
 };
