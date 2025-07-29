@@ -7,24 +7,21 @@ const db     = require("../db");
 const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 
 /* ───────── LOGIN ──────────────────────────────────────────────
-   Body: { "identifier": "<mail ODER username>", "password": "…" }
+   Body: { "identifier": "<username ODER e-mail>", "password": "…" }
 ---------------------------------------------------------------- */
 router.post("/login", (req, res) => {
   const { identifier, password } = req.body;
-
   if (!identifier || !password)
     return res.status(400).json({ message: "Daten fehlen" });
 
-  // Zugelassen: email ODER username
+  // ✔︎ sowohl e-mail als auch username zulassen
   const user = db.get(
     `SELECT * FROM users
-       WHERE email = ?  OR username = ?
+       WHERE email = ? OR username = ?
        LIMIT 1`,
     [identifier, identifier]
   );
-
-  if (!user)
-    return res.status(401).json({ message: "User nicht gefunden" });
+  if (!user) return res.status(401).json({ message: "User nicht gefunden" });
 
   if (!bcrypt.compareSync(password, user.passwordHash))
     return res.status(401).json({ message: "Passwort falsch" });
@@ -34,11 +31,10 @@ router.post("/login", (req, res) => {
     JWT_SECRET,
     { expiresIn: "12h" }
   );
-
   res.json({ token, role: user.role });
 });
 
-/* ───────── WEITERE ROUTEN bleiben unverändert ──────────────── */
+/* ───────── weitere Auth-Endpunkte ───────────────────────────── */
 // router.post("/register", …)
 // router.get ("/whoami",  …)
 

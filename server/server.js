@@ -12,11 +12,11 @@ const { DB_PATH, DB_FILE, DB_DIR } = db;
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
-/* ───────── Middleware ───────────────────────────────────────── */
+/* ─── Middleware ─────────────────────────────────────────────── */
 app.use(cors());
 app.use(express.json());
 
-/* ───────── 1) ADMIN: Backup / Restore ──────────────────────── */
+/* ─── ADMIN: Backup / Restore ────────────────────────────────── */
 app.get("/admin/backup", (_req, res) => {
   try {
     db.raw.pragma("wal_checkpoint(TRUNCATE)");
@@ -30,7 +30,8 @@ app.get("/admin/backup", (_req, res) => {
 });
 const upload = multer({ dest: "/tmp" });
 app.post("/admin/restore", upload.single("file"), (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "Keine Datei" });
+  if (!req.file)
+    return res.status(400).json({ message: "Keine Datei erhalten" });
   fs.mkdir(DB_DIR, { recursive: true }, () =>
     fs.copyFile(req.file.path, DB_PATH, err => {
       fs.unlink(req.file.path, () => {});
@@ -40,7 +41,7 @@ app.post("/admin/restore", upload.single("file"), (req, res) => {
   );
 });
 
-/* ───────── 2) NEU: Batch-Insert von Boxen ───────────────────── */
+/* ─── BATCH-INSERT von Boxen ─────────────────────────────────── */
 app.post("/api/boxes/batch", (req, res) => {
   const { type, count } = req.body;
   const valid = ["PU-M", "PU-S", "PR-SB", "PR-23"];
@@ -50,16 +51,18 @@ app.post("/api/boxes/batch", (req, res) => {
     return res.status(400).json({ message: "Anzahl 1–200 angeben" });
 
   const prefix = `${type}-`;
-  const row    = db.raw
-    .prepare(`SELECT serial FROM boxes WHERE serial LIKE ? ORDER BY serial DESC LIMIT 1`)
-    .get(`${prefix}%`);
-  let nextNum  = row ? parseInt(row.serial.slice(prefix.length), 10) + 1 : 1;
+  const last   = db.raw.prepare(
+    `SELECT serial FROM boxes
+       WHERE serial LIKE ?
+       ORDER BY serial DESC LIMIT 1`
+  ).get(`${prefix}%`);
+  let next     = last ? parseInt(last.serial.slice(prefix.length), 10) + 1 : 1;
 
   const insert = db.raw.prepare(`INSERT INTO boxes (serial) VALUES (?)`);
   try {
     db.raw.exec("BEGIN");
-    for (let i = 0; i < count; i++, nextNum++) {
-      insert.run(`${prefix}${String(nextNum).padStart(2, "0")}`);
+    for (let i = 0; i < count; i++, next++) {
+      insert.run(`${prefix}${String(next).padStart(2, "0")}`);
     }
     db.raw.exec("COMMIT");
     res.json({ message: `${count} Box(en) angelegt` });
@@ -70,15 +73,15 @@ app.post("/api/boxes/batch", (req, res) => {
   }
 });
 
-/* ───────── 3) AUTH-ROUTE wieder einschalten ─────────────────── */
-app.use("/api/auth", require("./routes/authRoutes"));   //  🔑  wieder aktiv
+/* ─── AUTH-ROUTEN – MUSS vor express.static stehen! ──────────── */
+app.use("/api/auth", require("./routes/authRoutes"));
 
-/* ───────── 4) React-Build & SPA-Fallback ────────────────────── */
+/* ─── React-Build & SPA-Fallback ─────────────────────────────── */
 const staticDir = path.join(__dirname, "static");
 app.use(express.static(staticDir));
 app.get("*", (_req, res) => res.sendFile(path.join(staticDir, "index.html")));
 
-/* ───────── Start ───────────────────────────────────────────── */
+/* ─── Start ──────────────────────────────────────────────────── */
 app.listen(PORT, () =>
-  console.log(`[BoxTracking] Server läuft auf Port ${PORT} | DB → ${DB_PATH}`)
+  console.log(`[BoxTracking] läuft auf Port ${PORT} | DB → ${DB_PATH}`)
 );
