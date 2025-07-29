@@ -7,8 +7,7 @@ const db     = require("../db");
 const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 
 /* ───────── LOGIN ─────────────────────────────────────────────
-   akzeptiert { identifier, password }
-            ODER { username,   password }
+   Body: { identifier OR username, password }
 ---------------------------------------------------------------- */
 router.post("/login", (req, res) => {
   try {
@@ -24,7 +23,8 @@ router.post("/login", (req, res) => {
          LIMIT 1`,
       [identifier, identifier]
     );
-    if (!user)
+
+    if (!user || !user.passwordHash)         // ⬅︎ neue Sicherheits-Prüfung
       return res.status(401).json({ message: "User nicht gefunden" });
 
     if (!bcrypt.compareSync(password, user.passwordHash))
@@ -38,10 +38,9 @@ router.post("/login", (req, res) => {
 
     res.json({ token, role: user.role });
   } catch (err) {
-    console.error("[auth/login]", err);          // ▶︎ erscheint im Render-Log
+    console.error("[auth/login]", err);
     res.status(500).json({ message: "Serverfehler beim Login" });
   }
 });
 
-/* weitere Endpunkte … */
 module.exports = router;
