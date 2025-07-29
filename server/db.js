@@ -1,6 +1,6 @@
 // server/db.js
 // ──────────────────────────────────────────────────────────────
-//  better-sqlite3-Wrapper  +  idempotente Admin-Reparatur
+//  better-sqlite3-Wrapper  +  Admin-Hash wird JEDES Mal gesetzt
 // ──────────────────────────────────────────────────────────────
 const path     = require("path");
 const fs       = require("fs");
@@ -14,7 +14,7 @@ const DB_PATH = path.join(DB_DIR, DB_FILE);
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 const _db = new Database(DB_PATH);
 
-/* ─── Grund-PRAGMAs & Tabellen ─────────────────────────────── */
+/* ─── Basis-PRAGMAs & Tabellen ─────────────────────────────── */
 _db.exec(`
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
@@ -53,37 +53,28 @@ _db.exec(`
   );
 `);
 
-/* ─── Admin-Sicherung ──────────────────────────────────────── */
+/* ─── Admin immer konsistent setzen (Upsert + neuer Hash) ──── */
 function ensureAdmin() {
-  const admin = _db.prepare(`
-      SELECT passwordHash
-        FROM users
-       WHERE username='admin'
-       LIMIT 1
-  `).get();
-
-  if (admin && admin.passwordHash) return;      // schon OK
-
   const hash = bcrypt.hashSync("admin", 10);
-  if (admin) {
-    _db.prepare(`
-        UPDATE users SET passwordHash=? WHERE username='admin'
-    `).run(hash);
-  } else {
-    _db.prepare(`
-        INSERT INTO users (username,email,passwordHash,role)
-        VALUES ('admin','admin@example.com',?, 'admin')
-    `).run(hash);
-  }
-  console.warn("⚠︎ Default-Admin (admin / admin) angelegt bzw. Hash repariert");
+
+  _db.exec(`
+    INSERT INTO users (username, email, passwordHash, role)
+    VALUES ('admin', 'admin@example.com', '${hash}', 'admin')
+    ON CONFLICT(username) DO UPDATE
+      SET passwordHash='${hash}',
+          email='admin@example.com',
+          role='admin';
+  `);
+
+  console.warn("⚠︎ Default-Admin-Passwort auf „admin“ gesetzt");
 }
 ensureAdmin();
 
-/* ─── kleine Promise-Wrapper ───────────────────────────────── */
+/* ─── kleine Promise-Helfer ────────────────────────────────── */
 function execStmt(method, sql, p) {
   const s = _db.prepare(sql);
-  if (!sql.includes("?"))                     return s[method]();
-  if (p == null || (Array.isArray(p) && !p.length)) return s[method]();
+  if (!sql.includes("?"))                                   return s[method]();
+  if (p == null || (Array.isArray(p) && !p.length))         return s[method]();
   return Array.isArray(p) ? s[method](...p) : s[method](p);
 }
 const get = (q,p)=>Promise.resolve(execStmt("get", q,p));
