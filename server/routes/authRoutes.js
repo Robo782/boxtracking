@@ -1,4 +1,3 @@
-// server/routes/authRoutes.js
 const router = require("express").Router();
 const jwt    = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
@@ -6,9 +5,9 @@ const db     = require("../db");
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 
-/* ───────── LOGIN ─────────────────────────────────────────────
-   Body: { identifier OR username, password }
----------------------------------------------------------------- */
+/* -------- LOGIN -----------------------------------------------------------
+   akzeptiert { identifier, password }  oder  { username, password }
+--------------------------------------------------------------------------- */
 router.post("/login", (req, res) => {
   try {
     const identifier = req.body.identifier ?? req.body.username;
@@ -24,7 +23,7 @@ router.post("/login", (req, res) => {
       [identifier, identifier]
     );
 
-    if (!user || !user.passwordHash)         // ⬅︎ neue Sicherheits-Prüfung
+    if (!user || !user.passwordHash)
       return res.status(401).json({ message: "User nicht gefunden" });
 
     if (!bcrypt.compareSync(password, user.passwordHash))
