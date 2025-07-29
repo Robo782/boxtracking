@@ -1,11 +1,4 @@
 // server/server.js
-// ============================================================================
-//  Express-Backend  |  BoxTracking  |  Render-Docker
-//  ▸ Admin-Backup  (WAL-Checkpoint + VACUUM INTO)  GET  /admin/backup
-//  ▸ Restore       POST /admin/restore
-//  ▸ NEU: Batch-Insert von Boxen        POST /api/boxes/batch
-//  ▸ React-Build wird nach den Admin-Routen ausgeliefert
-// ============================================================================
 const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
@@ -13,49 +6,41 @@ const fs      = require("fs");
 const os      = require("os");
 const multer  = require("multer");
 
-const db                        = require("./db");  // Wrapper + raw-Instanz
+const db                        = require("./db");
 const { DB_PATH, DB_FILE, DB_DIR } = db;
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
-/* ───────── Middleware ─────────────────────────────────────────────────── */
+/* ───────── Middleware ───────────────────────────────────────── */
 app.use(cors());
 app.use(express.json());
 
-/* ───────── 1) ADMIN – Backup / Restore ────────────────────────────────── */
-// GET /admin/backup  – konsistente DB herunterladen
+/* ───────── 1) ADMIN: Backup / Restore ──────────────────────── */
 app.get("/admin/backup", (_req, res) => {
   try {
-    db.raw.pragma("wal_checkpoint(TRUNCATE)");               // WAL flush
+    db.raw.pragma("wal_checkpoint(TRUNCATE)");
     const tmp = path.join(os.tmpdir(), `boxtracking-${Date.now()}.sqlite`);
-    db.raw.exec(`VACUUM INTO '${tmp}'`);                     // Konsistente Kopie
+    db.raw.exec(`VACUUM INTO '${tmp}'`);
     res.download(tmp, DB_FILE, err => { fs.unlink(tmp, () => {}); });
   } catch (err) {
     console.error("[admin/backup]", err);
     res.status(500).json({ message: "Backup fehlgeschlagen" });
   }
 });
-
-// POST /admin/restore  – hochgeladene DB ersetzt laufende
 const upload = multer({ dest: "/tmp" });
 app.post("/admin/restore", upload.single("file"), (req, res) => {
-  if (!req.file)
-    return res.status(400).json({ message: "Keine Datei erhalten" });
+  if (!req.file) return res.status(400).json({ message: "Keine Datei" });
   fs.mkdir(DB_DIR, { recursive: true }, () =>
     fs.copyFile(req.file.path, DB_PATH, err => {
       fs.unlink(req.file.path, () => {});
-      if (err) {
-        console.error("[admin/restore]", err);
-        return res.status(500).json({ message: "Restore fehlgeschlagen" });
-      }
+      if (err) return res.status(500).json({ message: "Restore fehlgeschlagen" });
       res.json({ message: "Datenbank wiederhergestellt" });
     })
   );
 });
 
-/* ───────── 2) NEU – Batch-Insert von Boxen ────────────────────────────── */
-// Body: { "type": "PU-M", "count": 12 }
+/* ───────── 2) NEU: Batch-Insert von Boxen ───────────────────── */
 app.post("/api/boxes/batch", (req, res) => {
   const { type, count } = req.body;
   const valid = ["PU-M", "PU-S", "PR-SB", "PR-23"];
@@ -65,13 +50,9 @@ app.post("/api/boxes/batch", (req, res) => {
     return res.status(400).json({ message: "Anzahl 1–200 angeben" });
 
   const prefix = `${type}-`;
-  const row    = db.raw.prepare(
-    `SELECT serial
-       FROM boxes
-       WHERE serial LIKE ?
-       ORDER BY serial DESC
-       LIMIT 1`
-  ).get(`${prefix}%`);
+  const row    = db.raw
+    .prepare(`SELECT serial FROM boxes WHERE serial LIKE ? ORDER BY serial DESC LIMIT 1`)
+    .get(`${prefix}%`);
   let nextNum  = row ? parseInt(row.serial.slice(prefix.length), 10) + 1 : 1;
 
   const insert = db.raw.prepare(`INSERT INTO boxes (serial) VALUES (?)`);
@@ -89,14 +70,15 @@ app.post("/api/boxes/batch", (req, res) => {
   }
 });
 
-/* ───────── 3) React-Build ─────────────────────────────────────────────── */
-const staticDir = path.join(__dirname, "static");  // per Dockerfile kopiert
-app.use(express.static(staticDir));
+/* ───────── 3) AUTH-ROUTE wieder einschalten ─────────────────── */
+app.use("/api/auth", require("./routes/authRoutes"));   //  🔑  wieder aktiv
 
-/* SPA-Fallback */
+/* ───────── 4) React-Build & SPA-Fallback ────────────────────── */
+const staticDir = path.join(__dirname, "static");
+app.use(express.static(staticDir));
 app.get("*", (_req, res) => res.sendFile(path.join(staticDir, "index.html")));
 
-/* ───────── Start ─────────────────────────────────────────────────────── */
+/* ───────── Start ───────────────────────────────────────────── */
 app.listen(PORT, () =>
   console.log(`[BoxTracking] Server läuft auf Port ${PORT} | DB → ${DB_PATH}`)
 );
