@@ -1,25 +1,28 @@
-// utils/api.js   (vollständige Datei)
-function request(path, opts) {
-  const token = localStorage.getItem("token");
-  return fetch(`/api${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...opts?.headers,
-    },
-    ...opts,
-  }).then(async r => {
-    if (!r.ok) {
-      const msg = await r.text().catch(() => r.statusText);
-      throw new Error(`${r.status} ${msg}`);
-    }
-    return r.status === 204 ? null : r.json();
-  });
+// universeller Fetch-Wrapper   (GET / POST / PATCH / DELETE)
+const BASE = "/api";               // bei Bedarf anpassen
+
+async function request(method, url, body) {
+  const opts = {
+    method,
+    headers: { "Content-Type": "application/json" }
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+
+  const res = await fetch(BASE + url, opts);
+
+  if (!res.ok) {
+    // Fehlertext (z.B. { message:"…" }) an den Aufrufer durchreichen
+    let msg = "Unbekannter Fehler";
+    try { msg = (await res.json()).message; } catch {}
+    throw new Error(msg);
+  }
+  // 204 No Content → nichts zurückgeben
+  return res.status === 204 ? null : res.json();
 }
 
 export default {
-  get:  (path)            => request(path),
-  post: (path, data)      => request(path, { method: "POST", body: JSON.stringify(data) }),
-  put:  (path, data)      => request(path, { method: "PUT",  body: JSON.stringify(data) }),
-  del:  (path)            => request(path, { method: "DELETE" }),
+  get   : (url)        => request("GET",    url),
+  post  : (url, body)  => request("POST",   url, body),
+  patch : (url, body)  => request("PATCH",  url, body),   //  ← NEU
+  del   : (url)        => request("DELETE", url)
 };
