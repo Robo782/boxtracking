@@ -1,53 +1,48 @@
 // client/src/pages/Login.jsx
-import { useState } from "react";
+import { useState }   from "react";
 import { useNavigate } from "react-router-dom";
-import api from "@/utils/api";               // dein bestehenden Fetch-Wrapper
+import api             from "@/utils/api";
 
 export default function Login() {
   const nav = useNavigate();
 
-  const [identifier, setId]   = useState("");   // ← vorher „username“
-  const [password,   setPw]   = useState("");
-  const [err,        setErr]  = useState("");
+  const [identifier, setIdentifier] = useState(""); // Benutzername ODER Mail
+  const [password,   setPassword]   = useState("");
+  const [error,      setError]      = useState("");
 
-  const onSubmit = (e) => {
+  const submit = (e) => {
     e.preventDefault();
-    setErr("");
+    setError("");
 
-    api
-      .post("/auth/login", { identifier, password })   // ← neues Payload
-      .then((data) => {
-        const { token } = data;
-        if (!token) throw new Error("kein Token");
-
-        localStorage.setItem("token", token);
-        window.dispatchEvent(new Event("authchange"));
-        nav("/boxes", { replace: true });
-      })
-      .catch(() => setErr("Login fehlgeschlagen"));
+    api.post("/auth/login", { identifier: identifier.trim(), password })
+       .then(({ token }) => {
+         if (!token) throw new Error("kein Token");
+         localStorage.setItem("token", token);
+         window.dispatchEvent(new Event("authchange"));
+         nav("/boxes", { replace: true });
+       })
+       .catch(() => setError("Login fehlgeschlagen"));
   };
 
   return (
     <main className="flex flex-col items-center justify-center h-screen">
-      <h1 className="text-2xl font-semibold mb-4">Device Box Tracker</h1>
+      <h1 className="text-2xl font-semibold mb-6">Device Box Tracker</h1>
 
-      {err && (
-        <p className="mb-2 text-red-500 border border-red-500 px-2 py-1 rounded">
-          {err}
+      {error && (
+        <p className="mb-3 text-red-500 border border-red-500 px-3 py-1 rounded">
+          {error}
         </p>
       )}
 
-      <form
-        onSubmit={onSubmit}
-        className="flex flex-col gap-2 w-72 border p-4 rounded"
-      >
-        {/* Identifier: Benutzername ODER E-Mail */}
+      <form onSubmit={submit}
+            className="w-80 flex flex-col gap-3 border p-6 rounded-lg bg-black/10">
+
         <input
           className="input input-bordered"
           type="text"
-          placeholder="Benutzer oder E-Mail"
+          placeholder="Benutzername oder E-Mail"
           value={identifier}
-          onChange={(e) => setId(e.target.value)}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
         />
 
@@ -56,7 +51,7 @@ export default function Login() {
           type="password"
           placeholder="Passwort"
           value={password}
-          onChange={(e) => setPw(e.target.value)}
+          onChange={(e) => setPassword(e.target.value)}
           required
         />
 
