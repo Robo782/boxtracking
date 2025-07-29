@@ -1,16 +1,22 @@
-const express = require("express");
-const ctrl    = require("../controllers/boxController");
-const router  = express.Router();
+/* ------------------------------------------------------------------
+   /api/boxes   –   Alle Boxen ausgeben  (später Filter & Pagination)
+   ------------------------------------------------------------------ */
+const router = require("express").Router();
+const db     = require("../db");            // dein Promise-Wrapper
 
-/* GET */
-router.get("/",           ctrl.getAll);
-router.get("/:id",        ctrl.getOne);
-router.get("/:id/history",ctrl.history);
-
-/* PUT – Statuswechsel */
-router.put("/:id/load",   ctrl.load);
-router.put("/:id/return", ctrl.returnBox);
-router.put("/:id/check",  ctrl.check);
-router.put("/:id/done",   ctrl.done);
+// GET /api/boxes
+router.get("/", async (_req, res) => {
+  try {
+    const boxes = await db.all(`
+      SELECT id, serial, status, cycles, pcc_id
+      FROM   boxes
+      ORDER  BY serial
+    `);
+    res.json(boxes);
+  } catch (err) {
+    console.error("[boxes/index]", err);
+    res.status(500).json({ message: "Serverfehler" });
+  }
+});
 
 module.exports = router;

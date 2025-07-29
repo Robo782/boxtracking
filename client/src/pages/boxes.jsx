@@ -1,53 +1,67 @@
 import { useEffect, useState } from "react";
-import BoxCard from "../components/BoxCard.jsx";
-import api from "../utils/api.js";
+import api from "@/utils/api";
 
 export default function Boxes() {
-  const [boxes,  setBoxes]  = useState([]);
-  const [filter, setFilter] = useState("");
+  /* ------- State -------- */
+  const [boxes, setBoxes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
 
-  /* Daten laden --------------------------------------------------------- */
+  /* ------- Daten laden --- */
   useEffect(() => {
-    reload();
+    api.get("/boxes")
+       .then(setBoxes)
+       .finally(() => setLoading(false));
   }, []);
 
-  const reload = () => {
-    api
-      .get("/boxes")                    // /api/boxes via utils/api.js
-      .then((data) => {
-        /* Fallback, falls der Server eine Fehlermeldung (Objekt) schickt */
-        setBoxes(Array.isArray(data) ? data : []);
-      })
-      .catch(() => setBoxes([]));
-  };
-
-  /* Filter -------------------------------------------------------------- */
-  const term = filter.toLowerCase();
-  const shown = boxes.filter(
-    (b) =>
-      b.serial.toLowerCase().includes(term) ||
-      (b.device_serial ?? "").toLowerCase().includes(term)
+  /* ------- Filtern -------- */
+  const visible = boxes.filter(b =>
+    b.serial.toLowerCase().includes(query.toLowerCase())
   );
 
-  /* UI ------------------------------------------------------------------ */
+  /* ------- UI ------------- */
   return (
-    <main className="p-4 flex flex-col gap-4">
+    <div className="p-4 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-semibold mb-4">Boxen</h1>
+
       <input
-        className="input input-bordered w-full max-w-xs"
-        placeholder="Suche nach Serial / Device …"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
+        type="text"
+        placeholder="Suche nach Serial …"
+        className="input input-bordered w-full mb-4"
+        value={query}
+        onChange={e => setQuery(e.target.value)}
       />
 
-      {!shown.length ? (
-        <p className="text-gray-400">Keine Boxen gefunden.</p>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.map((b) => (
-            <BoxCard key={b.id} box={b} />
-          ))}
+      {loading && <p>lade …</p>}
+
+      {!loading && !visible.length && (
+        <p>Keine Boxen gefunden.</p>
+      )}
+
+      {!loading && visible.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th>Serial</th>
+                <th>Status</th>
+                <th>Zyklen</th>
+                <th>PCC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(b => (
+                <tr key={b.id}>
+                  <td>{b.serial}</td>
+                  <td>{b.status}</td>
+                  <td>{b.cycles}</td>
+                  <td>{b.pcc_id ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-    </main>
+    </div>
   );
 }
