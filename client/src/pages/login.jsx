@@ -1,16 +1,15 @@
-// client/src/pages/Login.jsx
-import { useState }   from "react";
+import { useState }  from "react";
 import { useNavigate } from "react-router-dom";
-import api             from "@/utils/api";
+import api            from "@/utils/api";
 
 export default function Login() {
   const nav = useNavigate();
 
-  const [identifier, setIdentifier] = useState(""); // Benutzername ODER Mail
+  const [identifier, setIdentifier] = useState("");   // Name ODER Mail
   const [password,   setPassword]   = useState("");
   const [error,      setError]      = useState("");
 
-  const submit = (e) => {
+  const submit = e => {
     e.preventDefault();
     setError("");
 
@@ -42,7 +41,7 @@ export default function Login() {
           type="text"
           placeholder="Benutzername oder E-Mail"
           value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
+          onChange={e => setIdentifier(e.target.value)}
           required
         />
 
@@ -51,7 +50,7 @@ export default function Login() {
           type="password"
           placeholder="Passwort"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={e => setPassword(e.target.value)}
           required
         />
 
