@@ -1,67 +1,53 @@
 import { useEffect, useState } from "react";
-import api from "@/utils/api";
+import api       from "@/utils/api";
+import BoxCard   from "@/components/BoxCard";
 
 export default function Boxes() {
-  /* ------- State -------- */
-  const [boxes, setBoxes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const [boxes, setBoxes]   = useState([]);
+  const [loading, setLoad ] = useState(true);
+  const [q, setQ]           = useState("");
 
-  /* ------- Daten laden --- */
+  /* Daten laden */
   useEffect(() => {
     api.get("/boxes")
        .then(setBoxes)
-       .finally(() => setLoading(false));
+       .finally(() => setLoad(false));
   }, []);
 
-  /* ------- Filtern -------- */
-  const visible = boxes.filter(b =>
-    b.serial.toLowerCase().includes(query.toLowerCase())
+  /* Callback aus Card */
+  const updateStatus = (id, next) =>
+    setBoxes(prev =>
+      prev.map(b => (b.id === id ? { ...b, status: next } : b))
+    );
+
+  /* Filter */
+  const list = boxes.filter(b =>
+    b.serial.toLowerCase().includes(q.toLowerCase())
   );
 
-  /* ------- UI ------------- */
   return (
-    <div className="p-4 max-w-4xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-semibold mb-4">Boxen</h1>
 
       <input
-        type="text"
+        className="input input-bordered w-full mb-6"
         placeholder="Suche nach Serial …"
-        className="input input-bordered w-full mb-4"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
+        value={q}
+        onChange={e => setQ(e.target.value)}
       />
 
-      {loading && <p>lade …</p>}
+      {loading && <p>lädt …</p>}
 
-      {!loading && !visible.length && (
+      {!loading && !list.length && (
         <p>Keine Boxen gefunden.</p>
       )}
 
-      {!loading && visible.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="table table-zebra w-full">
-            <thead>
-              <tr>
-                <th>Serial</th>
-                <th>Status</th>
-                <th>Zyklen</th>
-                <th>PCC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map(b => (
-                <tr key={b.id}>
-                  <td>{b.serial}</td>
-                  <td>{b.status}</td>
-                  <td>{b.cycles}</td>
-                  <td>{b.pcc_id ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        {list.map(b => (
+          <BoxCard key={b.id} box={b} onChange={updateStatus} />
+        ))}
+      </div>
     </div>
   );
 }

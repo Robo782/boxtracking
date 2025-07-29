@@ -1,44 +1,34 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import api from "@/utils/api";
 
-const MAX_CYCLES = 50;
+export default function BoxCard({ box, onChange }) {
+  const [loading, setLoading] = useState(false);
 
-function getAction(box) {
-  switch (box.status) {
-    case "departed":    return ["Beladen & unterwegs",  "Zurückmelden", "return"];
-    case "returned":    return ["Zurück ungeprüft",      "Prüfen",       "check"];
-    case "maintenance": return ["In Wartung",           "Wartung ✔",    "done"];
-    default:            // available
-      return ["Verfügbar", box.cycles >= MAX_CYCLES ? "Wartung ✔" : "Beladen",
-              box.cycles >= MAX_CYCLES ? "done" : "load"];
-  }
-}
-
-export default function BoxCard({ box }) {
-  const [statusTxt, btnLabel, next] = getAction(box);
+  const changeStatus = () => {
+    setLoading(true);
+    api.patch(`/boxes/${box.id}/nextStatus`)
+       .then(({ next }) => onChange(box.id, next))
+       .finally(() => setLoading(false));
+  };
 
   return (
-    <article className="border rounded p-4 flex flex-col gap-2">
-      <h2 className="text-lg font-semibold">{box.serial}</h2>
+    <div className="card bg-base-200 shadow-md p-4">
+      <h2 className="font-semibold text-lg mb-1">{box.serial}</h2>
 
-      <p>Status: <strong>{statusTxt}</strong></p>
-      <p>Zyklen: {box.cycles}</p>
-      <p>Wartungen: {box.maintenance_count}</p>
-      <p>Device: {box.device_serial ?? "—"}</p>
+      <p className="mb-2">
+        <span className="opacity-60">Status:</span> {box.status}
+      </p>
+      <p className="text-sm mb-4">
+        Zyklen: {box.cycles} · Wartungen: {box.maintenance_count}
+      </p>
 
-      <div className="mt-2 flex gap-2">
-        <Link to={`/boxes/${box.id}/history`} className="btn btn-sm btn-outline">
-          Historie
-        </Link>
-
-        <Link
-          to={`/boxes/${box.id}/next?action=${next}`}
-          className={`btn btn-sm grow text-center ${
-            next === "done" ? "btn-success" : "btn-primary"
-          }`}
-        >
-          {btnLabel}
-        </Link>
-      </div>
-    </article>
+      <button
+        className="btn btn-sm btn-primary"
+        onClick={changeStatus}
+        disabled={loading}
+      >
+        {loading ? "…" : "Nächster Status"}
+      </button>
+    </div>
   );
 }
