@@ -1,61 +1,35 @@
-import { useParams, Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import api from "@/utils/api";
-import useAbortableFetch from "@/hooks/useAbortableFetch";
 
 export default function BoxHistory() {
-  const { id }       = useParams();
-  const [rows, setRows] = useState([]);
-  const [err,  setErr ] = useState("");
+  const { id } = useParams();
+  const [data, setData] = useState([]);
 
-  /* Daten holen */
-  useAbortableFetch(signal => {
-    api.get(`/boxes/${id}/history`, { signal })
-       .then(setRows)
-       .catch(e => e.name !== "AbortError" && setErr(e.message));
-  });
+  useEffect(() => {
+    api.get(`/history/${id}`).then(setData);
+  }, [id]);
 
   return (
-    <main className="p-4">
-      <Link to="/boxes" className="underline hover:no-underline">&larr; zurück</Link>
+    <div className="p-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-semibold mb-4">Verlauf Box {id}</h1>
 
-      <h1 className="text-2xl font-semibold mb-4">
-        Historie Box&nbsp;#{id} &nbsp;
-        <span className="text-sm font-normal">({rows.length}&nbsp;Zyklen)</span>
-      </h1>
+      {!data.length && <p>Keine Einträge gefunden.</p>}
 
-      {err && <p className="text-red-500">{err}</p>}
-
-      {!rows.length && !err && <p>Noch keine Historie vorhanden.</p>}
-
-      {rows.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Zyklus&nbsp;#</th>
-                <th>Device&nbsp;Serial</th>
-                <th>PCC&nbsp;ID</th>
-                <th>Loaded&nbsp;at</th>
-                <th>Unloaded&nbsp;at</th>
-                <th>Checked&nbsp;by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, idx) => (
-                <tr key={idx}>
-                  <td>{rows.length - idx}</td>
-                  <td>{r.device_serial}</td>
-                  <td>{r.pcc_id}</td>
-                  <td>{new Date(r.loaded_at).toLocaleString()}</td>
-                  <td>{r.unloaded_at ? new Date(r.unloaded_at).toLocaleString() : "—"}</td>
-                  <td>{r.checked_by ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </main>
+      <div className="space-y-4">
+        {data.map((item, i) => (
+          <div key={i} className="border border-base-300 p-4 rounded bg-base-200">
+            <p><strong>SN:</strong> {item.device_serial || "-"}</p>
+            <p><strong>ID:</strong> {item.pcc_id || "-"}</p>
+            <p><strong>Beladen:</strong> {item.loaded_at ? new Date(item.loaded_at).toLocaleString() : "-"}</p>
+            <p><strong>Entladen:</strong> {item.unloaded_at ? new Date(item.unloaded_at).toLocaleString() : "-"}</p>
+            <p><strong>Prüfer:</strong> {item.checked_by || "-"}</p>
+            {item.damage_reason && (
+              <p className="text-red-400"><strong>Schaden:</strong> {item.damage_reason}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

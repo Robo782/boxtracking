@@ -7,12 +7,12 @@ const NEXT = {
   departed: "returned",
   returned: null,
   maintenance: "available",
+  damaged: "available" // ✅ damaged → available erlaubt
 };
 
 function isValidDeviceSerial(serial) {
   return /^[A-Z0-9]{4}-\d{2}$/i.test(serial);
 }
-
 function isValidPccId(pcc) {
   return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc);
 }
@@ -38,7 +38,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     damage_reason,
     checklist1,
     checklist2,
-    checklist3,
+    checklist3
   } = req.body;
 
   const box = await db.get("SELECT * FROM boxes WHERE id=?", id);
@@ -58,15 +58,11 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
   }
 
-  if (!next) {
-    return res.status(400).json({ message: "Ungültiger Statuswechsel" });
-  }
+  if (!next) return res.status(400).json({ message: "Ungültiger Statuswechsel" });
 
   if (box.status === "available") {
     if (!device_serial || !pcc_id)
-      return res
-        .status(400)
-        .json({ message: "device_serial oder pcc_id fehlt" });
+      return res.status(400).json({ message: "device_serial oder pcc_id fehlt" });
 
     if (!isValidDeviceSerial(device_serial))
       return res.status(400).json({ message: "Geräte-SN ungültig" });
@@ -93,11 +89,10 @@ router.patch("/:id/nextStatus", async (req, res) => {
       damage_reason || null
     );
 
-    let cyclesInc = 0,
-        maintInc  = 0,
-        setCols   = `status=?`,
-        args      = [ next ];
-
+    let cyclesInc = 0;
+    let maintInc = 0;
+    let setCols = `status=?`;
+    const args = [next];
     const now = dayjs().toISOString();
 
     switch (next) {
@@ -108,14 +103,14 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
       case "returned":
         cyclesInc = 1;
-        setCols  += `, unloaded_at=?`;
+        setCols += `, unloaded_at=?`;
         args.push(now);
         break;
 
       case "maintenance":
       case "available":
         setCols += `, checked_by=?`;
-        args.push(inspector);
+        args.push(inspector || "system");
         break;
 
       case "damaged":
@@ -125,7 +120,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
 
     if (next === "available") {
-      maintInc += box.status === "maintenance" ? 1 : 0;
+      maintInc += (box.status === "maintenance") ? 1 : 0;
       setCols += `,
         device_serial=NULL, pcc_id=NULL,
         loaded_at=NULL, unloaded_at=NULL, checked_by=NULL,
@@ -134,17 +129,13 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
     args.push(id);
 
-    db.raw
-      .prepare(
-        `
+    db.raw.prepare(`
       UPDATE boxes
-        SET ${setCols},
-            cycles = cycles + ${cyclesInc},
-            maintenance_count = maintenance_count + ${maintInc}
-      WHERE id = ?
-    `
-      )
-      .run(...args);
+         SET ${setCols},
+             cycles = cycles + ${cyclesInc},
+             maintenance_count = maintenance_count + ${maintInc}
+       WHERE id = ?
+    `).run(...args);
 
     db.raw.exec("COMMIT");
     res.json({ id: box.id, next });
