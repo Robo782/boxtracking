@@ -93,7 +93,7 @@ export default function BoxCard({ box, onChange }) {
       <button
         className={`btn btn-sm mt-4 ${getButtonClass()}`}
         onClick={(e) => {
-          e.stopPropagation(); // verhindert Öffnen der History beim Buttonklick
+          e.stopPropagation();
           handleNext();
         }}
         disabled={busy}
@@ -101,8 +101,89 @@ export default function BoxCard({ box, onChange }) {
         {busy ? "…" : getActionLabel()}
       </button>
 
-      {/* Die bestehenden Modals (departed / returned) bleiben unverändert */}
-      {/* … */}
+      {/* ─── MODAL: Beladen ───────────────────────────── */}
+      {modal === "departed" && (
+        <dialog open className="modal">
+          <div className="modal-box">
+            <h3 className="font-semibold mb-3">Box beladen</h3>
+            <input className="input input-bordered w-full mb-3"
+              placeholder="SN (xxxx-yy)"
+              value={device} onChange={e => setDevice(e.target.value)} />
+            <input className="input input-bordered w-full mb-3"
+              placeholder="ID (pcc 12345 zz)"
+              value={pcc} onChange={e => setPcc(e.target.value)} />
+            {error && <p className="text-red-500">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <button className="btn btn-sm" onClick={close}>Abbrechen</button>
+              <button className="btn btn-sm btn-success"
+                onClick={() => sendNext({ device_serial: device, pcc_id: pcc })}>
+                Speichern
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* ─── MODAL: Prüfung ───────────────────────────── */}
+      {modal === "returned" && (
+        <dialog open className="modal">
+          <div className="modal-box">
+            <h3 className="font-semibold mb-3">Prüfung</h3>
+            <input className="input input-bordered w-full mb-3"
+              placeholder="Prüfer-Kürzel"
+              value={insp} onChange={e => setInsp(e.target.value)} />
+            <div className="form-control mb-2">
+              <label className="cursor-pointer label">
+                <span className="label-text">Reinigung durchgeführt</span>
+                <input type="checkbox" className="checkbox" checked={c1} onChange={e => setC1(e.target.checked)} />
+              </label>
+              <label className="cursor-pointer label">
+                <span className="label-text">Sichtkontrolle</span>
+                <input type="checkbox" className="checkbox" checked={c2} onChange={e => setC2(e.target.checked)} />
+              </label>
+              <label className="cursor-pointer label">
+                <span className="label-text">Funktionstest</span>
+                <input type="checkbox" className="checkbox" checked={c3} onChange={e => setC3(e.target.checked)} />
+              </label>
+            </div>
+
+            <label className="cursor-pointer label">
+              <span className="label-text text-red-400">Box beschädigt?</span>
+              <input type="checkbox" className="checkbox checkbox-error"
+                checked={damaged} onChange={e => setDamaged(e.target.checked)} />
+            </label>
+
+            {damaged && (
+              <textarea
+                className="textarea textarea-bordered w-full mt-3"
+                placeholder="Schadensbeschreibung"
+                value={reason} onChange={e => setReason(e.target.value)} />
+            )}
+
+            {error && <p className="text-red-500">{error}</p>}
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button className="btn btn-sm" onClick={close}>Abbrechen</button>
+              <button className="btn btn-sm btn-info"
+                onClick={() => {
+                  if (!insp) return setError("Prüfer fehlt");
+                  if (damaged && reason.trim().length < 3) return setError("Schadensbegründung fehlt");
+                  if (!damaged && (!c1 || !c2 || !c3)) return setError("Alle Punkte müssen bestätigt sein");
+                  sendNext({
+                    inspector: insp,
+                    damaged,
+                    damage_reason: damaged ? reason.trim() : null,
+                    checklist1: c1,
+                    checklist2: c2,
+                    checklist3: c3
+                  });
+                }}>
+                Speichern
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
     </div>
   );
 }
