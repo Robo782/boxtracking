@@ -67,10 +67,20 @@ export default function BoxCard({ box, onChange }) {
     }
   };
 
+  const handleCardClick = (e) => {
+    const target = e.target;
+    if (
+      target.closest("button") ||
+      target.closest("dialog") ||
+      modal !== null
+    ) return;
+    navigate(`/boxes/${box.id}/history`);
+  };
+
   return (
     <div
       className="card bg-base-200 shadow-md p-4 hover:cursor-pointer hover:bg-base-300 transition-all"
-      onClick={() => navigate(`/boxhistory/${box.id}`)}
+      onClick={handleCardClick}
     >
       <h2 className="font-semibold text-lg">{box.serial}</h2>
       <p className="mt-1 mb-2">
@@ -101,7 +111,7 @@ export default function BoxCard({ box, onChange }) {
         {busy ? "…" : getActionLabel()}
       </button>
 
-      {/* ─── MODAL: Beladen ───────────────────────────── */}
+      {/* ─── Modal: Box beladen ───────────────────────── */}
       {modal === "departed" && (
         <dialog open className="modal">
           <div className="modal-box">
@@ -124,7 +134,7 @@ export default function BoxCard({ box, onChange }) {
         </dialog>
       )}
 
-      {/* ─── MODAL: Prüfung ───────────────────────────── */}
+      {/* ─── Modal: Prüfung ───────────────────────────── */}
       {modal === "returned" && (
         <dialog open className="modal">
           <div className="modal-box">
