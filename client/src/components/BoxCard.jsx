@@ -3,11 +3,12 @@ import api from "@/utils/api";
 
 export default function BoxCard({ box, onChange }) {
   const [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState(null); // "departed" | "returned"
+  const [modal, setModal] = useState(null);
   const [device, setDevice] = useState("");
   const [pcc, setPcc] = useState("");
   const [insp, setInsp] = useState("");
   const [damaged, setDamaged] = useState(false);
+  const [reason, setReason] = useState("");
   const [c1, setC1] = useState(false);
   const [c2, setC2] = useState(false);
   const [c3, setC3] = useState(false);
@@ -15,69 +16,48 @@ export default function BoxCard({ box, onChange }) {
 
   const close = () => {
     setModal(null);
-    setDevice("");
-    setPcc("");
-    setInsp("");
-    setDamaged(false);
-    setC1(false);
-    setC2(false);
-    setC3(false);
+    setDevice(""); setPcc(""); setInsp(""); setReason("");
+    setDamaged(false); setC1(false); setC2(false); setC3(false);
     setError("");
   };
 
   const sendNext = (body) => {
     setBusy(true);
-    api
-      .patch(`/boxes/${box.id}/nextStatus`, body)
-      .then((res) => {
+    api.patch(`/boxes/${box.id}/nextStatus`, body)
+      .then(res => {
         onChange(box.id, { ...body, status: res.next });
         close();
       })
-      .catch((err) => {
+      .catch(err => {
         setError(err.response?.data?.message || "Fehler beim Statuswechsel");
       })
       .finally(() => setBusy(false));
   };
 
   const handleNext = () => {
-    if (box.status === "available") {
-      setModal("departed");
-    } else if (box.status === "departed") {
-      sendNext({});
-    } else if (box.status === "returned") {
-      setModal("returned");
-    } else if (box.status === "maintenance") {
-      sendNext({});
-    }
+    if (box.status === "available") setModal("departed");
+    else if (box.status === "departed") sendNext({});
+    else if (box.status === "returned") setModal("returned");
+    else if (box.status === "maintenance") sendNext({});
   };
 
   const getActionLabel = () => {
     switch (box.status) {
-      case "available":
-        return "Box beladen";
-      case "departed":
-        return "Box zurücknehmen";
-      case "returned":
-        return "Prüfung abschließen";
-      case "maintenance":
-        return "Wartung abschließen";
-      default:
-        return "Aktion";
+      case "available": return "Box beladen";
+      case "departed": return "Box zurücknehmen";
+      case "returned": return "Prüfung abschließen";
+      case "maintenance": return "Wartung abschließen";
+      default: return "Aktion";
     }
   };
 
   const getButtonClass = () => {
     switch (box.status) {
-      case "available":
-        return "btn-success";
-      case "departed":
-        return "btn-warning";
-      case "returned":
-        return "btn-info";
-      case "maintenance":
-        return "btn-accent";
-      default:
-        return "btn-neutral";
+      case "available": return "btn-success";
+      case "departed": return "btn-warning";
+      case "returned": return "btn-info";
+      case "maintenance": return "btn-accent";
+      default: return "btn-neutral";
     }
   };
 
@@ -109,7 +89,7 @@ export default function BoxCard({ box, onChange }) {
         {busy ? "…" : getActionLabel()}
       </button>
 
-      {/* Modal für Beladung */}
+      {/* Modal: Beladung */}
       {modal === "departed" && (
         <dialog open className="modal">
           <div className="modal-box">
@@ -119,25 +99,19 @@ export default function BoxCard({ box, onChange }) {
               placeholder="Device-Serial (xxxx-yy)"
               value={device}
               onChange={(e) => setDevice(e.target.value)}
-              required
             />
             <input
               className="input input-bordered w-full mb-3"
               placeholder="PCC-ID (pcc 12345 zz)"
               value={pcc}
               onChange={(e) => setPcc(e.target.value)}
-              required
             />
             {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button className="btn btn-sm" onClick={close}>
-                Abbrechen
-              </button>
+              <button className="btn btn-sm" onClick={close}>Abbrechen</button>
               <button
                 className="btn btn-sm btn-success"
-                onClick={() =>
-                  sendNext({ device_serial: device, pcc_id: pcc })
-                }
+                onClick={() => sendNext({ device_serial: device, pcc_id: pcc })}
               >
                 Speichern
               </button>
@@ -146,7 +120,7 @@ export default function BoxCard({ box, onChange }) {
         </dialog>
       )}
 
-      {/* Modal für Rückgabeprüfung */}
+      {/* Modal: Prüfung */}
       {modal === "returned" && (
         <dialog open className="modal">
           <div className="modal-box">
@@ -156,68 +130,55 @@ export default function BoxCard({ box, onChange }) {
               placeholder="Prüfer-Kürzel"
               value={insp}
               onChange={(e) => setInsp(e.target.value)}
-              required
             />
+
             <div className="form-control mb-2">
               <label className="cursor-pointer label">
                 <span className="label-text">Reinigung durchgeführt</span>
-                <input
-                  type="checkbox"
-                  className="checkbox"
-                  checked={c1}
-                  onChange={(e) => setC1(e.target.checked)}
-                />
+                <input type="checkbox" className="checkbox" checked={c1} onChange={e => setC1(e.target.checked)} />
               </label>
               <label className="cursor-pointer label">
                 <span className="label-text">Sichtkontrolle</span>
-                <input
-                  type="checkbox"
-                  className="checkbox"
-                  checked={c2}
-                  onChange={(e) => setC2(e.target.checked)}
-                />
+                <input type="checkbox" className="checkbox" checked={c2} onChange={e => setC2(e.target.checked)} />
               </label>
               <label className="cursor-pointer label">
                 <span className="label-text">Funktionstest</span>
-                <input
-                  type="checkbox"
-                  className="checkbox"
-                  checked={c3}
-                  onChange={(e) => setC3(e.target.checked)}
-                />
+                <input type="checkbox" className="checkbox" checked={c3} onChange={e => setC3(e.target.checked)} />
               </label>
             </div>
+
             <label className="cursor-pointer label">
               <span className="label-text text-red-400">Box beschädigt?</span>
-              <input
-                type="checkbox"
-                className="checkbox checkbox-error"
-                checked={damaged}
-                onChange={(e) => setDamaged(e.target.checked)}
-              />
+              <input type="checkbox" className="checkbox checkbox-error" checked={damaged} onChange={e => setDamaged(e.target.checked)} />
             </label>
+
+            {damaged && (
+              <textarea
+                className="textarea textarea-bordered w-full mt-3"
+                placeholder="Schadensbeschreibung (Pflicht bei beschädigt)"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            )}
+
             {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+
             <div className="flex justify-end gap-2 mt-4">
-              <button className="btn btn-sm" onClick={close}>
-                Abbrechen
-              </button>
+              <button className="btn btn-sm" onClick={close}>Abbrechen</button>
               <button
                 className="btn btn-sm btn-info"
                 onClick={() => {
-                  if (!insp) {
-                    setError("Prüfer fehlt");
-                    return;
-                  }
-                  if (!damaged && (!c1 || !c2 || !c3)) {
-                    setError("Alle Punkte müssen bestätigt sein");
-                    return;
-                  }
+                  if (!insp) return setError("Prüfer fehlt");
+                  if (damaged && reason.trim().length < 3) return setError("Schadensbegründung fehlt");
+                  if (!damaged && (!c1 || !c2 || !c3)) return setError("Alle Punkte müssen bestätigt sein");
+
                   sendNext({
                     inspector: insp,
+                    damaged,
+                    damage_reason: damaged ? reason.trim() : null,
                     checklist1: c1,
                     checklist2: c2,
-                    checklist3: c3,
-                    damaged,
+                    checklist3: c3
                   });
                 }}
               >

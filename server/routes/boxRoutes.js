@@ -20,7 +20,8 @@ function isValidPccId(pcc) {
 router.get("/", async (_req, res) => {
   const boxes = await db.all(`
     SELECT id, serial, status, cycles, maintenance_count,
-           device_serial, pcc_id, checked_by
+           device_serial, pcc_id, checked_by,
+           damaged_at, damage_reason
     FROM boxes
     ORDER BY serial
   `);
@@ -34,6 +35,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     pcc_id,
     inspector,
     damaged,
+    damage_reason,
     checklist1,
     checklist2,
     checklist3,
@@ -45,8 +47,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
   let next = NEXT[box.status];
 
   if (box.status === "returned") {
-    if (!inspector)
-      return res.status(400).json({ message: "Prüfer-Kürzel fehlt" });
+    if (!inspector) return res.status(400).json({ message: "Prüfer-Kürzel fehlt" });
 
     if (damaged === true) {
       next = "damaged";
@@ -80,21 +81,22 @@ router.patch("/:id/nextStatus", async (req, res) => {
     db.raw.prepare(`
       INSERT INTO box_history
           (box_id, device_serial, pcc_id,
-           loaded_at, unloaded_at, checked_by)
-      VALUES (?, ?, ?, ?, ?, ?)
+           loaded_at, unloaded_at, checked_by, damage_reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       box.id,
       box.device_serial,
       box.pcc_id,
       box.loaded_at,
       box.unloaded_at,
-      box.checked_by
+      box.checked_by,
+      damage_reason || null
     );
 
     let cyclesInc = 0,
-      maintInc = 0,
-      setCols = `status=?`,
-      args = [next];
+        maintInc  = 0,
+        setCols   = `status=?`,
+        args      = [ next ];
 
     const now = dayjs().toISOString();
 
@@ -106,15 +108,19 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
       case "returned":
         cyclesInc = 1;
-        setCols += `, unloaded_at=?`;
+        setCols  += `, unloaded_at=?`;
         args.push(now);
         break;
 
       case "maintenance":
       case "available":
-      case "damaged":
         setCols += `, checked_by=?`;
         args.push(inspector);
+        break;
+
+      case "damaged":
+        setCols += `, checked_by=?, damaged_at=?, damage_reason=?`;
+        args.push(inspector, now, damage_reason || null);
         break;
     }
 
@@ -122,7 +128,8 @@ router.patch("/:id/nextStatus", async (req, res) => {
       maintInc += box.status === "maintenance" ? 1 : 0;
       setCols += `,
         device_serial=NULL, pcc_id=NULL,
-        loaded_at=NULL, unloaded_at=NULL, checked_by=NULL`;
+        loaded_at=NULL, unloaded_at=NULL, checked_by=NULL,
+        damaged_at=NULL, damage_reason=NULL`;
     }
 
     args.push(id);

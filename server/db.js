@@ -1,7 +1,4 @@
 // server/db.js
-// ──────────────────────────────────────────────────────────────
-//  better-sqlite3-Wrapper  +  Admin-Hash wird JEDES Mal gesetzt
-// ──────────────────────────────────────────────────────────────
 const path     = require("path");
 const fs       = require("fs");
 const bcrypt   = require("bcrypt");
@@ -39,17 +36,20 @@ _db.exec(`
     pcc_id            TEXT,
     loaded_at         TEXT,
     unloaded_at       TEXT,
-    checked_by        TEXT
+    checked_by        TEXT,
+    damaged_at        TEXT,
+    damage_reason     TEXT
   );
 
   CREATE TABLE IF NOT EXISTS box_history (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    box_id        INTEGER NOT NULL REFERENCES boxes(id) ON DELETE CASCADE,
-    device_serial TEXT,
-    pcc_id        TEXT,
-    loaded_at     TEXT,
-    unloaded_at   TEXT,
-    checked_by    TEXT
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    box_id         INTEGER NOT NULL REFERENCES boxes(id) ON DELETE CASCADE,
+    device_serial  TEXT,
+    pcc_id         TEXT,
+    loaded_at      TEXT,
+    unloaded_at    TEXT,
+    checked_by     TEXT,
+    damage_reason  TEXT
   );
 `);
 
