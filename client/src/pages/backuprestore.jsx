@@ -41,11 +41,11 @@ export default function BackupRestore() {
 
     setResetting(true);
     try {
-      await api.delete("/backup/clear");
+      await api.del("/backup/clear");
       alert("Alle Inhalte wurden erfolgreich gelöscht.");
     } catch (err) {
       console.error(err);
-      alert("Fehler beim Löschen: " + (err.response?.data?.message || err.message));
+      alert("Fehler beim Löschen: " + err.message);
     } finally {
       setResetting(false);
     }
@@ -77,14 +77,16 @@ export default function BackupRestore() {
               setFileName(e.target.files[0] ? e.target.files[0].name : "")
             }
             className="file:mr-3 file:rounded file:border-0
-                     file:bg-blue-50 file:px-4 file:py-2
-                     file:text-sm file:font-semibold file:text-blue-700
-                     hover:file:bg-blue-100"
+                       file:bg-blue-50 file:px-4 file:py-2
+                       file:text-sm file:font-semibold file:text-blue-700
+                       hover:file:bg-blue-100"
           />
         </label>
+
         <span className="block text-sm text-gray-400">
           {fileName || "Keine ausgewählt"}
         </span>
+
         <button
           type="submit"
           className="rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700"
