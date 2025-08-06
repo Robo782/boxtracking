@@ -1,41 +1,42 @@
 const router = require("express").Router();
-const db     = require("../db");
-const dayjs  = require("dayjs");
+const db = require("../db");
+const dayjs = require("dayjs");
 
 const NEXT = {
-  available   : "departed",
-  departed    : "returned",
-  returned    : null,         // wird dynamisch gesetzt!
-  maintenance : "available",
+  available: "departed",
+  departed: "returned",
+  returned: null,
+  maintenance: "available",
 };
 
-// Formatvalidierung
 function isValidDeviceSerial(serial) {
   return /^[A-Z0-9]{4}-\d{2}$/i.test(serial);
 }
+
 function isValidPccId(pcc) {
   return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc);
 }
 
-/* ---------- GET /api/boxes ------------------------------------------- */
 router.get("/", async (_req, res) => {
   const boxes = await db.all(`
     SELECT id, serial, status, cycles, maintenance_count,
            device_serial, pcc_id, checked_by
-      FROM boxes
-     ORDER BY serial
+    FROM boxes
+    ORDER BY serial
   `);
   res.json(boxes);
 });
 
-/* ---------- PATCH /api/boxes/:id/nextStatus -------------------------- */
 router.patch("/:id/nextStatus", async (req, res) => {
   const { id } = req.params;
   const {
-    device_serial, pcc_id,
+    device_serial,
+    pcc_id,
     inspector,
     damaged,
-    checklist1, checklist2, checklist3
+    checklist1,
+    checklist2,
+    checklist3,
   } = req.body;
 
   const box = await db.get("SELECT * FROM boxes WHERE id=?", id);
@@ -44,8 +45,10 @@ router.patch("/:id/nextStatus", async (req, res) => {
   let next = NEXT[box.status];
 
   if (box.status === "returned") {
-    if (!inspector) return res.status(400).json({ message: "Prüfer-Kürzel fehlt" });
-    if (damaged) {
+    if (!inspector)
+      return res.status(400).json({ message: "Prüfer-Kürzel fehlt" });
+
+    if (damaged === true) {
       next = "damaged";
     } else if (box.cycles >= 50) {
       next = "maintenance";
@@ -54,13 +57,19 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
   }
 
-  if (!next) return res.status(400).json({ message: "Ungültiger Statuswechsel" });
+  if (!next) {
+    return res.status(400).json({ message: "Ungültiger Statuswechsel" });
+  }
 
   if (box.status === "available") {
     if (!device_serial || !pcc_id)
-      return res.status(400).json({ message: "device_serial oder pcc_id fehlt" });
+      return res
+        .status(400)
+        .json({ message: "device_serial oder pcc_id fehlt" });
+
     if (!isValidDeviceSerial(device_serial))
       return res.status(400).json({ message: "Geräte-SN ungültig" });
+
     if (!isValidPccId(pcc_id))
       return res.status(400).json({ message: "PCC-ID ungültig" });
   }
@@ -83,9 +92,9 @@ router.patch("/:id/nextStatus", async (req, res) => {
     );
 
     let cyclesInc = 0,
-        maintInc  = 0,
-        setCols   = `status=?`,
-        args      = [ next ];
+      maintInc = 0,
+      setCols = `status=?`,
+      args = [next];
 
     const now = dayjs().toISOString();
 
@@ -97,7 +106,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
       case "returned":
         cyclesInc = 1;
-        setCols  += `, unloaded_at=?`;
+        setCols += `, unloaded_at=?`;
         args.push(now);
         break;
 
@@ -110,7 +119,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
 
     if (next === "available") {
-      maintInc += (box.status === "maintenance") ? 1 : 0;
+      maintInc += box.status === "maintenance" ? 1 : 0;
       setCols += `,
         device_serial=NULL, pcc_id=NULL,
         loaded_at=NULL, unloaded_at=NULL, checked_by=NULL`;
@@ -118,19 +127,23 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
     args.push(id);
 
-    db.raw.prepare(`
+    db.raw
+      .prepare(
+        `
       UPDATE boxes
-         SET ${setCols},
-             cycles = cycles + ${cyclesInc},
-             maintenance_count = maintenance_count + ${maintInc}
-       WHERE id = ?
-    `).run(...args);
+        SET ${setCols},
+            cycles = cycles + ${cyclesInc},
+            maintenance_count = maintenance_count + ${maintInc}
+      WHERE id = ?
+    `
+      )
+      .run(...args);
 
     db.raw.exec("COMMIT");
     res.json({ id: box.id, next });
   } catch (e) {
     db.raw.exec("ROLLBACK");
-    console.error("[boxes/nextStatus]", e);
+    console.error("[BOX STATUS ERROR]", e.message, e.stack);
     res.status(500).json({ message: "Update fehlgeschlagen" });
   }
 });
