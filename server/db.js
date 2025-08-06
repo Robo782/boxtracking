@@ -31,7 +31,7 @@ _db.exec(`
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     serial            TEXT UNIQUE NOT NULL,
     status            TEXT CHECK (
-                     status IN ('available','departed','returned','maintenance')
+                     status IN ('available','departed','returned','maintenance','damaged')
                    ) DEFAULT 'available',
     cycles            INTEGER DEFAULT 0,
     maintenance_count INTEGER DEFAULT 0,
