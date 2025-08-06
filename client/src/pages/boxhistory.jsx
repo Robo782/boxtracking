@@ -1,4 +1,3 @@
-// client/src/pages/boxhistory.jsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "@/utils/api";
@@ -11,8 +10,12 @@ export default function BoxHistory() {
   useEffect(() => {
     api.get(`/boxes/${id}/history`)
       .then(data => {
-        setEntries(groupByCycle(data));
-        if (data.length > 0) setSerial(data[0].serial);
+        if (!data || !data.length) return setEntries([]);
+
+        // Seriennummer aus dem ersten Eintrag extrahieren
+        if (data[0].serial) setSerial(data[0].serial);
+        const grouped = groupByRealCycle(data);
+        setEntries(grouped);
       })
       .catch(err => {
         console.error("History-Fehler:", err);
@@ -20,22 +23,35 @@ export default function BoxHistory() {
       });
   }, [id]);
 
-  // Gruppiert alle Einträge nach geladenem Zeitstempel (Zyklus)
-  function groupByCycle(data) {
-    const grouped = {};
+  /** Gruppiert realistische Zyklen:
+   * jeder Zyklus = beladen → entladen → geprüft
+   */
+  function groupByRealCycle(data) {
+    const grouped = [];
+    let current = null;
 
     data.forEach(entry => {
-      const key = entry.loaded_at || `unbekannt-${Math.random()}`;
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(entry);
+      const hasLoad = !!entry.loaded_at;
+
+      if (hasLoad) {
+        if (current) grouped.push(current); // vorherigen abschließen
+        current = {
+          serial: entry.device_serial,
+          pcc_id: entry.pcc_id,
+          loaded_at: entry.loaded_at,
+          unloaded_at: entry.unloaded_at,
+          checked_by: entry.checked_by
+        };
+      } else if (current) {
+        // Ergänze unload/prüfer im gleichen Zyklus
+        current.unloaded_at ??= entry.unloaded_at;
+        current.checked_by ??= entry.checked_by;
+      }
     });
 
-    // Rückgabe als sortiertes Array mit Zyklusnummer
-    const sorted = Object.entries(grouped)
-      .sort((a, b) => new Date(b[0]) - new Date(a[0]))
-      .map(([k, items], i) => ({ zyklus: i + 1, items }));
+    if (current) grouped.push(current);
 
-    return sorted;
+    return grouped.reverse(); // neuester Zyklus zuerst
   }
 
   return (
@@ -48,19 +64,18 @@ export default function BoxHistory() {
         <p className="text-gray-400">Keine Einträge gefunden.</p>
       )}
 
-      {entries.map(({ zyklus, items }, index) => {
-        const e = items[0]; // ersten Eintrag für Darstellung nutzen
-        return (
-          <div key={index} className="p-4 border border-base-300 rounded bg-base-100 shadow">
-            <h2 className="font-semibold text-lg mb-2">Zyklus {zyklus}</h2>
-            <p><strong>SN:</strong> {e.device_serial || "–"}</p>
-            <p><strong>ID:</strong> {e.pcc_id || "–"}</p>
-            <p><strong>Beladen:</strong> {formatDate(e.loaded_at)}</p>
-            <p><strong>Entladen:</strong> {formatDate(e.unloaded_at)}</p>
-            <p><strong>Geprüft von:</strong> {e.checked_by || "–"}</p>
-          </div>
-        );
-      })}
+      {entries.map((e, index) => (
+        <div key={index} className="p-4 border border-base-300 rounded bg-base-100 shadow">
+          <h2 className="font-semibold text-lg mb-2">
+            Zyklus {entries.length - index}
+          </h2>
+          <p><strong>SN:</strong> {e.serial || "–"}</p>
+          <p><strong>ID:</strong> {e.pcc_id || "–"}</p>
+          <p><strong>Beladen:</strong> {formatDate(e.loaded_at)}</p>
+          <p><strong>Entladen:</strong> {formatDate(e.unloaded_at)}</p>
+          <p><strong>Geprüft von:</strong> {e.checked_by || "–"}</p>
+        </div>
+      ))}
     </section>
   );
 }
