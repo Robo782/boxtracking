@@ -35,13 +35,14 @@ router.patch("/:id/nextStatus", async (req, res) => {
     device_serial, pcc_id,
     inspector,
     damaged,
-    checklist1, checklist2, checklist3 // symbolisch, derzeit nicht ausgewertet
+    checklist1, checklist2, checklist3
   } = req.body;
 
   const box = await db.get("SELECT * FROM boxes WHERE id=?", id);
   if (!box) return res.status(404).json({ message: "Box nicht gefunden" });
 
   let next = NEXT[box.status];
+
   if (box.status === "returned") {
     if (!inspector) return res.status(400).json({ message: "Prüfer-Kürzel fehlt" });
     if (damaged) {
@@ -55,7 +56,6 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
   if (!next) return res.status(400).json({ message: "Ungültiger Statuswechsel" });
 
-  /* ---------- Validierung ------------------------------------------- */
   if (box.status === "available") {
     if (!device_serial || !pcc_id)
       return res.status(400).json({ message: "device_serial oder pcc_id fehlt" });
@@ -65,7 +65,6 @@ router.patch("/:id/nextStatus", async (req, res) => {
       return res.status(400).json({ message: "PCC-ID ungültig" });
   }
 
-  /* ---------- Transaktion ------------------------------------------- */
   try {
     db.raw.exec("BEGIN");
 
