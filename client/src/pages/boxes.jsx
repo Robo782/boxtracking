@@ -1,23 +1,24 @@
 import { useEffect, useState } from "react";
-import api       from "@/utils/api";
-import BoxCard   from "@/components/BoxCard";
+import api from "@/utils/api";
+import BoxCard from "@/components/BoxCard";
 
 export default function Boxes() {
-  const [boxes, setBoxes]   = useState([]);
-  const [loading, setLoad ] = useState(true);
-  const [q, setQ]           = useState("");
+  const [boxes, setBoxes] = useState([]);
+  const [loading, setLoad] = useState(true);
+  const [q, setQ] = useState("");
 
   /* Daten laden */
   useEffect(() => {
-    api.get("/boxes")
-       .then(setBoxes)
-       .finally(() => setLoad(false));
+    api
+      .get("/boxes")
+      .then(setBoxes)
+      .finally(() => setLoad(false));
   }, []);
 
   /* Callback aus Card */
-  const updateStatus = (id, next) =>
+  const updateStatus = (id, nextData) =>
     setBoxes(prev =>
-      prev.map(b => (b.id === id ? { ...b, status: next } : b))
+      prev.map(b => (b.id === id ? { ...b, ...nextData } : b))
     );
 
   /* Filter */
@@ -38,9 +39,7 @@ export default function Boxes() {
 
       {loading && <p>lädt …</p>}
 
-      {!loading && !list.length && (
-        <p>Keine Boxen gefunden.</p>
-      )}
+      {!loading && !list.length && <p>Keine Boxen gefunden.</p>}
 
       {/* Grid */}
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
