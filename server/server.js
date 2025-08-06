@@ -1,15 +1,14 @@
-// server/server.js ---------------------------------------------------------
 const express = require("express");
-const cors    = require("cors");
-const multer  = require("multer");
-const path    = require("path");
-const fs      = require("fs");
-const os      = require("os");
+const cors = require("cors");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+const os = require("os");
 
-const db                = require("./db");      // enthält ensureAdmin()
+const db = require("./db"); // enthält ensureAdmin()
 const { DB_PATH, DB_DIR } = db;
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 10_000;
 
 /* ─────────────── Global Middleware ──────────────────────────────────── */
@@ -37,7 +36,7 @@ app.post("/admin/restore", upload.single("file"), (req, res) => {
     fs.copyFile(req.file.path, DB_PATH, (err) => {
       fs.unlink(req.file.path, () => {});
       if (err) return res.status(500).json({ message: "Restore fehlgeschlagen" });
-      db.ensureAdmin();                              // Hash sofort reparieren
+      db.ensureAdmin(); // Hash sofort reparieren
       res.json({ message: "Datenbank wiederhergestellt" });
     });
   });
@@ -54,9 +53,9 @@ app.post("/api/boxes/batch", (req, res) => {
 
   const prefix = `${type}-`;
   const last = db.raw.prepare(`
-      SELECT serial FROM boxes
-       WHERE serial LIKE ?
-       ORDER BY serial DESC LIMIT 1
+    SELECT serial FROM boxes
+    WHERE serial LIKE ?
+    ORDER BY serial DESC LIMIT 1
   `).get(`${prefix}%`);
   let next = last ? parseInt(last.serial.slice(prefix.length), 10) + 1 : 1;
 
@@ -75,8 +74,9 @@ app.post("/api/boxes/batch", (req, res) => {
 });
 
 /* ─────────────── API-Routen ─────────────────────────────────────────── */
-app.use("/api/auth",  require("./routes/authRoutes"));
-app.use("/api/boxes", require("./routes/boxRoutes"));   // Box-Liste
+app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/boxes", require("./routes/boxRoutes"));
+app.use("/api/backup", require("./routes/backupRoutes")); // ✅ NEU
 
 /* ─────────────── React-Frontend ─────────────────────────────────────── */
 const staticDir = path.join(__dirname, "static");
