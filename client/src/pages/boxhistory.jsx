@@ -4,32 +4,42 @@ import api from "@/utils/api";
 
 export default function BoxHistory() {
   const { id } = useParams();
-  const [data, setData] = useState([]);
+  const [entries, setEntries] = useState([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    api.get(`/history/${id}`).then(setData);
+    api.get(`/boxes/${id}/history`)
+      .then(res => {
+        if (Array.isArray(res)) setEntries(res);
+        else throw new Error("Ungültige Daten");
+      })
+      .catch(err => {
+        setError("Fehler beim Laden der Daten");
+        console.error(err);
+      });
   }, [id]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-semibold mb-4">Verlauf Box {id}</h1>
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-semibold mb-6">Verlauf Box {id}</h1>
 
-      {!data.length && <p>Keine Einträge gefunden.</p>}
+      {error && <p className="text-red-500">{error}</p>}
 
-      <div className="space-y-4">
-        {data.map((item, i) => (
-          <div key={i} className="border border-base-300 p-4 rounded bg-base-200">
-            <p><strong>SN:</strong> {item.device_serial || "-"}</p>
-            <p><strong>ID:</strong> {item.pcc_id || "-"}</p>
-            <p><strong>Beladen:</strong> {item.loaded_at ? new Date(item.loaded_at).toLocaleString() : "-"}</p>
-            <p><strong>Entladen:</strong> {item.unloaded_at ? new Date(item.unloaded_at).toLocaleString() : "-"}</p>
-            <p><strong>Prüfer:</strong> {item.checked_by || "-"}</p>
-            {item.damage_reason && (
-              <p className="text-red-400"><strong>Schaden:</strong> {item.damage_reason}</p>
-            )}
-          </div>
+      {!entries.length && !error && (
+        <p className="text-gray-400">Keine Einträge gefunden.</p>
+      )}
+
+      <ul className="space-y-4">
+        {entries.map(entry => (
+          <li key={entry.id} className="border border-base-300 rounded p-4">
+            <p><strong>SN:</strong> {entry.device_serial}</p>
+            <p><strong>ID:</strong> {entry.pcc_id}</p>
+            <p><strong>Beladen:</strong> {entry.loaded_at ? new Date(entry.loaded_at).toLocaleString() : "–"}</p>
+            <p><strong>Entladen:</strong> {entry.unloaded_at ? new Date(entry.unloaded_at).toLocaleString() : "–"}</p>
+            <p><strong>Geprüft von:</strong> {entry.checked_by || "–"}</p>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

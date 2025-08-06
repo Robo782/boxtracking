@@ -145,5 +145,23 @@ router.patch("/:id/nextStatus", async (req, res) => {
     res.status(500).json({ message: "Update fehlgeschlagen" });
   }
 });
+// Verlauf für eine Box abrufen
+router.get("/:id/history", async (req, res) => {
+  const { id } = req.params;
 
+  try {
+    const history = await db.all(`
+      SELECT id, device_serial, pcc_id,
+             loaded_at, unloaded_at, checked_by
+        FROM box_history
+       WHERE box_id = ?
+       ORDER BY id DESC
+    `, [id]);
+
+    res.json(history);
+  } catch (err) {
+    console.error("[GET /:id/history]", err);
+    res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
+  }
+});
 module.exports = router;
