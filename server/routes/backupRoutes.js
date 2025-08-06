@@ -1,34 +1,37 @@
-/**
- * Klein & simpel:
- *  GET /api/backup/download   →  sendet die aktuelle SQLite-Datei
- */
-const express = require("express");
-const router  = express.Router();
-const { DB_PATH } = require("../db");
+// server/routes/backupRoutes.js
+const router = require("express").Router();
+const fs = require("fs");
 const path = require("path");
+const db = require("../db");
 
-router.get("/download", (_req, res) => {
-  res.download(DB_PATH, path.basename(DB_PATH), (err) => {
-    if (err) {
-      console.error("❌ Backup-Download fehlgeschlagen:", err);
-      if (!res.headersSent) res.status(500).send("Backup-Download fehlgeschlagen");
-    }
+const DB_PATH = db.DB_PATH;
+
+// Backup: aktuelle DB-Datei als Download
+router.get("/", (_req, res) => {
+  res.download(DB_PATH, "backup.sqlite");
+});
+
+// Restore: DB ersetzen durch Upload
+router.post("/restore", (req, res) => {
+  if (!req.files?.file)
+    return res.status(400).json({ message: "Keine Datei hochgeladen" });
+
+  const upload = req.files.file;
+  upload.mv(DB_PATH, err => {
+    if (err) return res.status(500).json({ message: "Fehler beim Speichern" });
+    res.json({ message: "Wiederherstellung erfolgreich" });
   });
 });
-// Leert alle relevanten Tabellen – aber löscht nicht die Struktur
-router.delete("/clear", async (req, res) => {
-  const user = req.user;
-  if (!user || user.role !== "admin") {
-    return res.status(403).json({ message: "Nur Admins dürfen das durchführen" });
-  }
 
+// ✅ NEU: Inhalte der Tabellen löschen, Struktur beibehalten
+router.delete("/clear", async (_req, res) => {
   try {
-    db.raw.exec("DELETE FROM box_history;");
-    db.raw.exec("DELETE FROM boxes;");
-    res.json({ message: "Alle Daten erfolgreich gelöscht." });
-  } catch (err) {
-    console.error("[DELETE /backup/clear]", err);
-    res.status(500).json({ message: "Fehler beim Löschen der Daten." });
+    await db.exec(`DELETE FROM box_history`);
+    await db.exec(`DELETE FROM boxes`);
+    res.status(204).end(); // No Content
+  } catch (e) {
+    console.error("[BACKUP CLEAR ERROR]", e);
+    res.status(500).json({ message: "Fehler beim Löschen der Inhalte" });
   }
 });
 
