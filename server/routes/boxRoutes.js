@@ -1,3 +1,4 @@
+// server/routes/boxRoutes.js
 const router = require("express").Router();
 const db = require("../db");
 const dayjs = require("dayjs");
@@ -28,6 +29,13 @@ router.get("/", async (_req, res) => {
   res.json(boxes);
 });
 
+router.get("/:id", async (req, res) => {
+  const { id } = req.params;
+  const box = await db.get(`SELECT * FROM boxes WHERE id = ?`, [id]);
+  if (!box) return res.status(404).json({ message: "Box nicht gefunden" });
+  res.json(box);
+});
+
 router.patch("/:id/nextStatus", async (req, res) => {
   const { id } = req.params;
   const {
@@ -48,6 +56,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
   if (box.status === "returned") {
     if (!inspector) return res.status(400).json({ message: "Prüfer-Kürzel fehlt" });
+
     if (damaged === true) {
       next = "damaged";
     } else if (box.cycles >= 50) {
@@ -73,10 +82,10 @@ router.patch("/:id/nextStatus", async (req, res) => {
   try {
     db.raw.exec("BEGIN");
 
-    // vor dem Wechsel Status speichern
     db.raw.prepare(`
       INSERT INTO box_history
-        (box_id, device_serial, pcc_id, loaded_at, unloaded_at, checked_by, damage_reason)
+          (box_id, device_serial, pcc_id,
+           loaded_at, unloaded_at, checked_by, damage_reason)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       box.id,
@@ -99,16 +108,19 @@ router.patch("/:id/nextStatus", async (req, res) => {
         setCols += `, device_serial=?, pcc_id=?, loaded_at=?`;
         args.push(device_serial, pcc_id, now);
         break;
+
       case "returned":
         cyclesInc = 1;
         setCols += `, unloaded_at=?`;
         args.push(now);
         break;
+
       case "maintenance":
       case "available":
         setCols += `, checked_by=?`;
         args.push(inspector || "system");
         break;
+
       case "damaged":
         setCols += `, checked_by=?, damaged_at=?, damage_reason=?`;
         args.push(inspector, now, damage_reason || null);
@@ -124,6 +136,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
 
     args.push(id);
+
     db.raw.prepare(`
       UPDATE boxes
          SET ${setCols},
@@ -141,45 +154,32 @@ router.patch("/:id/nextStatus", async (req, res) => {
   }
 });
 
+// Verlauf für eine Box abrufen (Zyklen gruppiert)
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const box = await db.get("SELECT serial FROM boxes WHERE id=?", id);
-    if (!box) return res.status(404).json({ message: "Box nicht gefunden" });
-
     const rows = await db.all(`
-      SELECT id, device_serial, pcc_id,
-             loaded_at, unloaded_at, checked_by
+      SELECT id, device_serial, pcc_id, loaded_at, unloaded_at, checked_by
         FROM box_history
        WHERE box_id = ?
        ORDER BY loaded_at ASC, id ASC
     `, [id]);
 
-    // Gruppierung anhand von loaded_at Timestamps
-    const grouped = {};
-    for (const row of rows) {
-      const key = row.loaded_at || `x-${row.id}`;
-      if (!grouped[key]) grouped[key] = {};
-      const entry = grouped[key];
-
-      entry.serial = box.serial;
-      if (row.loaded_at) {
-        entry.device_serial = row.device_serial;
-        entry.pcc_id = row.pcc_id;
-        entry.loaded_at = row.loaded_at;
-      }
-      if (row.unloaded_at) {
-        entry.unloaded_at = row.unloaded_at;
-        entry.checked_by = row.checked_by;
-      }
+    const cycles = [];
+    for (let i = 0; i < rows.length; i += 2) {
+      const load  = rows[i];
+      const unload = rows[i + 1] || {};
+      cycles.push({
+        device_serial: load.device_serial || unload.device_serial || "–",
+        pcc_id       : load.pcc_id        || unload.pcc_id        || "–",
+        loaded_at    : load.loaded_at     || "–",
+        unloaded_at  : unload.unloaded_at || "–",
+        checked_by   : unload.checked_by  || "–"
+      });
     }
 
-    const merged = Object.values(grouped)
-      .map((entry, i) => ({ zyklus: i + 1, ...entry }))
-      .reverse(); // neueste oben
-
-    res.json(merged);
+    res.json(cycles);
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
