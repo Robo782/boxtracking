@@ -1,4 +1,3 @@
-// server/routes/boxRoutes.js
 const router = require("express").Router();
 const db = require("../db");
 const dayjs = require("dayjs");
@@ -160,26 +159,36 @@ router.get("/:id/history", async (req, res) => {
 
   try {
     const rows = await db.all(`
-      SELECT id, device_serial, pcc_id, loaded_at, unloaded_at, checked_by
-        FROM box_history
-       WHERE box_id = ?
-       ORDER BY loaded_at ASC, id ASC
+      SELECT bh.id, bh.device_serial, bh.pcc_id,
+             bh.loaded_at, bh.unloaded_at, bh.checked_by,
+             b.serial AS box_serial
+        FROM box_history bh
+   LEFT JOIN boxes b ON b.id = bh.box_id
+       WHERE bh.box_id = ?
+    ORDER BY bh.loaded_at ASC, bh.unloaded_at ASC
     `, [id]);
 
-    const cycles = [];
-    for (let i = 0; i < rows.length; i += 2) {
-      const load  = rows[i];
-      const unload = rows[i + 1] || {};
-      cycles.push({
-        device_serial: load.device_serial || unload.device_serial || "–",
-        pcc_id       : load.pcc_id        || unload.pcc_id        || "–",
-        loaded_at    : load.loaded_at     || "–",
-        unloaded_at  : unload.unloaded_at || "–",
-        checked_by   : unload.checked_by  || "–"
-      });
+    const result = [];
+    let buffer = null;
+
+    for (const entry of rows) {
+      const hasLoad = !!entry.loaded_at;
+      const hasUnload = !!entry.unloaded_at;
+
+      if (hasLoad && !hasUnload) {
+        buffer = { ...entry }; // Start neuer Zyklus
+      } else if (!hasLoad && hasUnload && buffer) {
+        result.push({ ...buffer, ...entry }); // Beende Zyklus
+        buffer = null;
+      } else {
+        result.push(entry); // Einzelfall
+        buffer = null;
+      }
     }
 
-    res.json(cycles);
+    if (buffer) result.push(buffer); // letzter Zyklus (nur beladen)
+
+    res.json(result);
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
