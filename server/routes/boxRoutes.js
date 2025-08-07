@@ -17,6 +17,7 @@ function isValidPccId(pcc) {
   return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc);
 }
 
+// Alle Boxen abrufen
 router.get("/", async (_req, res) => {
   const boxes = await db.all(`
     SELECT id, serial, status, cycles, maintenance_count,
@@ -28,6 +29,7 @@ router.get("/", async (_req, res) => {
   res.json(boxes);
 });
 
+// Einzelne Box abrufen
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const box = await db.get(`SELECT * FROM boxes WHERE id = ?`, [id]);
@@ -35,6 +37,7 @@ router.get("/:id", async (req, res) => {
   res.json(box);
 });
 
+// Statuswechsel
 router.patch("/:id/nextStatus", async (req, res) => {
   const { id } = req.params;
   const {
@@ -153,42 +156,45 @@ router.patch("/:id/nextStatus", async (req, res) => {
   }
 });
 
-// Verlauf für eine Box abrufen (Zyklen gruppiert)
+// Verlauf für eine Box abrufen
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
 
   try {
     const rows = await db.all(`
-      SELECT bh.id, bh.device_serial, bh.pcc_id,
-             bh.loaded_at, bh.unloaded_at, bh.checked_by,
-             b.serial AS box_serial
-        FROM box_history bh
-   LEFT JOIN boxes b ON b.id = bh.box_id
-       WHERE bh.box_id = ?
-    ORDER BY bh.loaded_at ASC, bh.unloaded_at ASC
+      SELECT device_serial, pcc_id, loaded_at, unloaded_at, checked_by
+        FROM box_history
+       WHERE box_id = ?
+       ORDER BY loaded_at ASC, id ASC
     `, [id]);
 
-    const result = [];
-    let buffer = null;
+    const cycles = [];
+    let current = null;
 
-    for (const entry of rows) {
-      const hasLoad = !!entry.loaded_at;
-      const hasUnload = !!entry.unloaded_at;
+    for (const row of rows) {
+      if (row.loaded_at) {
+        // neuer Zyklus beginnt
+        if (current) cycles.push(current);
+        current = {
+          device_serial: row.device_serial || "–",
+          pcc_id: row.pcc_id || "–",
+          loaded_at: row.loaded_at || "–",
+          unloaded_at: "–",
+          checked_by: "–"
+        };
+      }
 
-      if (hasLoad && !hasUnload) {
-        buffer = { ...entry }; // Start neuer Zyklus
-      } else if (!hasLoad && hasUnload && buffer) {
-        result.push({ ...buffer, ...entry }); // Beende Zyklus
-        buffer = null;
-      } else {
-        result.push(entry); // Einzelfall
-        buffer = null;
+      if (row.unloaded_at && current) {
+        current.unloaded_at = row.unloaded_at;
+        current.checked_by = row.checked_by || "–";
+        cycles.push(current);
+        current = null;
       }
     }
 
-    if (buffer) result.push(buffer); // letzter Zyklus (nur beladen)
+    if (current) cycles.push(current); // falls letzter Zyklus nicht abgeschlossen
 
-    res.json(result);
+    res.json(cycles);
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });

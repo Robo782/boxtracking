@@ -1,53 +1,33 @@
+// client/src/pages/boxhistory.jsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "@/utils/api";
 
 export default function BoxHistory() {
   const { id } = useParams();
-  const [entries, setEntries] = useState([]);
   const [serial, setSerial] = useState(null);
+  const [entries, setEntries] = useState([]);
 
   useEffect(() => {
+    // 1. Hole Seriennummer separat
+    api.get(`/boxes/${id}`)
+      .then(data => setSerial(data.serial))
+      .catch(() => setSerial(null));
+
+    // 2. Lade Historie (bereits serverseitig gruppiert)
     api.get(`/boxes/${id}/history`)
       .then(data => {
-        const paired = pairCycles(data);
-        setEntries(paired);
-        if (data.length > 0) setSerial(data[0].box_serial);
+        const cleaned = data.map((entry, index) => ({
+          zyklus: index + 1,
+          ...entry
+        }));
+        setEntries(cleaned);
       })
       .catch(err => {
         console.error("History-Fehler:", err);
         setEntries([]);
       });
   }, [id]);
-
-  function pairCycles(data) {
-    const result = [];
-    let buffer = null;
-
-    const sorted = [...data].sort((a, b) =>
-      new Date(a.loaded_at || a.unloaded_at) - new Date(b.loaded_at || b.unloaded_at)
-    );
-
-    for (const entry of sorted) {
-      const hasLoad = !!entry.loaded_at;
-      const hasUnload = !!entry.unloaded_at;
-
-      if (hasLoad && !hasUnload) {
-        buffer = { ...entry }; // Start neuer Zyklus
-      } else if (!hasLoad && hasUnload && buffer) {
-        result.push({ ...buffer, ...entry }); // Beende den Zyklus
-        buffer = null;
-      } else {
-        result.push(entry); // Fallback (nur laden oder entladen)
-        buffer = null;
-      }
-    }
-
-    // falls am Ende ein Ladeeintrag übrig bleibt
-    if (buffer) result.push(buffer);
-
-    return result.map((e, i) => ({ ...e, zyklus: i + 1 }));
-  }
 
   return (
     <section className="max-w-3xl mx-auto p-6 space-y-6">
