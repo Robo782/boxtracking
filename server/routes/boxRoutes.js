@@ -153,6 +153,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
   }
 });
 
+// server/routes/boxRoutes.js (Ausschnitt - nur /:id/history Route)
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
 
@@ -161,25 +162,33 @@ router.get("/:id/history", async (req, res) => {
       SELECT id, device_serial, pcc_id, loaded_at, unloaded_at, checked_by
         FROM box_history
        WHERE box_id = ?
-       ORDER BY loaded_at ASC, id ASC
+       ORDER BY COALESCE(loaded_at, unloaded_at) ASC
     `, [id]);
 
     const cycles = [];
-    for (let i = 0; i < rows.length; i++) {
-      const current = rows[i];
-      const next = rows[i + 1];
+    let current = null;
 
-      if (!current.loaded_at) continue;
+    for (const entry of rows) {
+      if (entry.loaded_at) {
+        // Start eines neuen Zyklus
+        if (current) {
+          cycles.push(current); // Vorherigen Zyklus abschließen
+        }
+        current = {
+          device_serial: entry.device_serial,
+          pcc_id: entry.pcc_id,
+          loaded_at: entry.loaded_at,
+          unloaded_at: null,
+          checked_by: null
+        };
+      } else if (entry.unloaded_at && current) {
+        current.unloaded_at = entry.unloaded_at;
+        current.checked_by = entry.checked_by;
+      }
+    }
 
-      const cycle = {
-        device_serial: current.device_serial || "–",
-        pcc_id       : current.pcc_id || "–",
-        loaded_at    : current.loaded_at || null,
-        unloaded_at  : next?.unloaded_at || null,
-        checked_by   : next?.checked_by || "–"
-      };
-
-      cycles.push(cycle);
+    if (current) {
+      cycles.push(current);
     }
 
     res.json(cycles);
@@ -188,5 +197,6 @@ router.get("/:id/history", async (req, res) => {
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
   }
 });
+
 
 module.exports = router;

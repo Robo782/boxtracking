@@ -8,14 +8,15 @@ export default function BoxHistory() {
   const [serial, setSerial] = useState(null);
 
   useEffect(() => {
+    // Hole Seriennummer separat
     api.get(`/boxes/${id}`).then((box) => {
       setSerial(box.serial);
     });
 
     api.get(`/boxes/${id}/history`)
-      .then(data => {
-        const paired = data.map((e, i) => ({ ...e, zyklus: i + 1 }));
-        setEntries(paired);
+      .then((data) => {
+        const prepared = data.map((e, i) => ({ ...e, zyklus: i + 1 }));
+        setEntries(prepared);
       })
       .catch(err => {
         console.error("History-Fehler:", err);
@@ -50,6 +51,5 @@ export default function BoxHistory() {
 function formatDate(date) {
   if (!date) return "–";
   const d = new Date(date);
-  if (isNaN(d.getTime())) return "–";
   return d.toLocaleDateString("de-DE") + ", " + d.toLocaleTimeString("de-DE");
 }
