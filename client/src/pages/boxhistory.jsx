@@ -1,27 +1,21 @@
-// client/src/pages/boxhistory.jsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "@/utils/api";
 
 export default function BoxHistory() {
   const { id } = useParams();
-  const [serial, setSerial] = useState(null);
   const [entries, setEntries] = useState([]);
+  const [serial, setSerial] = useState(null);
 
   useEffect(() => {
-    // 1. Hole Seriennummer separat
-    api.get(`/boxes/${id}`)
-      .then(data => setSerial(data.serial))
-      .catch(() => setSerial(null));
+    api.get(`/boxes/${id}`).then((box) => {
+      setSerial(box.serial);
+    });
 
-    // 2. Lade Historie (bereits serverseitig gruppiert)
     api.get(`/boxes/${id}/history`)
       .then(data => {
-        const cleaned = data.map((entry, index) => ({
-          zyklus: index + 1,
-          ...entry
-        }));
-        setEntries(cleaned);
+        const paired = data.map((e, i) => ({ ...e, zyklus: i + 1 }));
+        setEntries(paired);
       })
       .catch(err => {
         console.error("History-Fehler:", err);
@@ -56,5 +50,6 @@ export default function BoxHistory() {
 function formatDate(date) {
   if (!date) return "–";
   const d = new Date(date);
+  if (isNaN(d.getTime())) return "–";
   return d.toLocaleDateString("de-DE") + ", " + d.toLocaleTimeString("de-DE");
 }
