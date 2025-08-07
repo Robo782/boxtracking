@@ -8,13 +8,12 @@ export default function BoxHistory() {
   const [serial, setSerial] = useState(null);
 
   useEffect(() => {
-    // Hole Seriennummer separat
     api.get(`/boxes/${id}`).then((box) => {
       setSerial(box.serial);
     });
 
     api.get(`/boxes/${id}/history`)
-      .then((data) => {
+      .then(data => {
         const prepared = data.map((e, i) => ({ ...e, zyklus: i + 1 }));
         setEntries(prepared);
       })

@@ -159,7 +159,8 @@ router.get("/:id/history", async (req, res) => {
 
   try {
     const rows = await db.all(`
-      SELECT id, device_serial, pcc_id, loaded_at, unloaded_at, checked_by
+      SELECT id, device_serial, pcc_id,
+             loaded_at, unloaded_at, checked_by
         FROM box_history
        WHERE box_id = ?
        ORDER BY COALESCE(loaded_at, unloaded_at) ASC
@@ -170,9 +171,10 @@ router.get("/:id/history", async (req, res) => {
 
     for (const entry of rows) {
       if (entry.loaded_at) {
-        // Start eines neuen Zyklus
+        // neuen Zyklus starten
         if (current) {
-          cycles.push(current); // Vorherigen Zyklus abschließen
+          // Vorherigen Zyklus abschließen (kein Entladen erfolgt)
+          cycles.push(current);
         }
         current = {
           device_serial: entry.device_serial,
@@ -181,15 +183,14 @@ router.get("/:id/history", async (req, res) => {
           unloaded_at: null,
           checked_by: null
         };
-      } else if (entry.unloaded_at && current) {
+      } else if (entry.unloaded_at && current && !current.unloaded_at) {
         current.unloaded_at = entry.unloaded_at;
         current.checked_by = entry.checked_by;
       }
     }
 
-    if (current) {
-      cycles.push(current);
-    }
+    // Letzten Zyklus hinzufügen (auch wenn nur beladen)
+    if (current) cycles.push(current);
 
     res.json(cycles);
   } catch (err) {
@@ -197,6 +198,7 @@ router.get("/:id/history", async (req, res) => {
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
   }
 });
+
 
 
 module.exports = router;
