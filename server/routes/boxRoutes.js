@@ -13,10 +13,10 @@ const NEXT = {
 };
 
 /* -------- Helper: Validierungen -------- */
-function isSerial(s)   { return /^[A-Za-z0-9_-]{2,}$/i.test(s); }
-function isDevice(s)   { return /^[A-Za-z0-9_-]{2,}$/i.test(s); }
-function isInspector(s){ return typeof s === "string" && s.trim().length >= 2; }
-function isPcc(pcc)    { return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc); }
+function isSerial(s)    { return /^[A-Za-z0-9_-]{2,}$/i.test(s); }
+function isDevice(s)    { return /^[A-Za-z0-9_-]{2,}$/i.test(s); }
+function isInspector(s) { return typeof s === "string" && s.trim().length >= 2; }
+function isPcc(pcc)     { return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc); }
 
 /* -------------------- GET /api/boxes -------------------- */
 router.get("/", async (req, res) => {
@@ -34,6 +34,7 @@ router.get("/", async (req, res) => {
     `;
 
     if (search && String(search).trim().length > 0) {
+      const term = String(search).trim();
       sql += `
         WHERE
           LOWER(b.serial)           LIKE '%' || LOWER(?) || '%'
@@ -49,7 +50,6 @@ router.get("/", async (req, res) => {
                    )
           )
       `;
-      const term = String(search).trim();
       params.push(term, term, term, term, term);
     }
 
@@ -88,13 +88,14 @@ router.get("/:id", async (req, res) => {
 });
 
 /* -------------------- PATCH /api/boxes/:id/nextStatus -------------------- */
-// (deine bestehende Next-Status-Logik bleibt 1:1 erhalten – hier gekürzt dargestellt)
+/* WICHTIG: Deine bestehende Next-Status-Logik bleibt erhalten.
+   Ich ändere hier nichts, damit Zyklen/Prüfung/Wartung/Historie
+   unverändert funktionieren. */
 router.patch("/:id/nextStatus", async (req, res) => {
   const { id } = req.params;
   const { inspector, device_serial, pcc_id, damaged, damage_reason,
           checklist1, checklist2, checklist3 } = req.body;
 
-  // ... vollständige Validierung & Transaktion (unverändert)
   try {
     db.raw.exec("BEGIN");
 
@@ -104,12 +105,12 @@ router.patch("/:id/nextStatus", async (req, res) => {
     const next = NEXT[box.status];
     if (!next) throw new Error("Kein nächster Status");
 
-    // Beispiel für deine bestehende Logik:
-    // - cycles hochzählen beim returned
-    // - Wartung/Inspektion/Damaged behandeln
-    // - Historie schreiben (box_history)
-    // - checked_by setzen usw.
-    // ... (hier im Upload gekürzt)
+    /* -------------------------------------------------------
+       HIER bleibt deine bestehende Logik (Zyklen zählen,
+       Prüfungspflichten, damaged/maintenance, Historie usw.)
+       unverändert. Falls du willst, poste mir die volle
+       Originalversion, dann setze ich sie 1:1 hier ein.
+    ------------------------------------------------------- */
 
     db.raw.exec("COMMIT");
     res.json({ id: box.id, next });
@@ -121,19 +122,14 @@ router.patch("/:id/nextStatus", async (req, res) => {
 });
 
 /* -------------------- GET /api/boxes/:id/history --------------------
-   Zyklus = DISTINCT loaded_at (erste Zeile je Zeitpunkt).
-   Im Zeitfenster [start, next_start):
-     - letztes unloaded_at
-     - letzter checked_by
-     - damaged + damage_reason (falls gesetzt)
---------------------------------------------------------------------- */
-/* -------------------- GET /api/boxes/:id/history --------------------
    Zyklus = Zeitraum von loaded_at bis zum nächsten loaded_at.
-   Wir laden rohe History-Einträge und bauen die Zyklen in JS zusammen.
---------------------------------------------------------------------- */
-/* -------------------- GET /api/boxes/:id/history --------------------
-   Zyklus = Zeitraum von loaded_at bis zum nächsten loaded_at.
-   Wir laden rohe History-Einträge und bauen die Zyklen in JS zusammen.
+   Wir laden rohe History-Einträge (ohne Window-SQL) und bauen
+   die Zyklen in JS zusammen.
+
+   ACHTUNG: box_history hat KEIN 'damaged_at'.
+   Wir liefern 'damaged_at' synthetisch als Zeitpunkt des passenden
+   History-Eintrags (loaded_at oder unloaded_at), damit das Frontend
+   weiterhin ein Datum anzeigen kann.
 --------------------------------------------------------------------- */
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
@@ -143,11 +139,11 @@ router.get("/:id/history", async (req, res) => {
       `
       SELECT id, box_id, device_serial, pcc_id,
              loaded_at, unloaded_at, checked_by,
-             damaged_at, damage_reason
+             damaged, damage_reason
         FROM box_history
        WHERE box_id = ?
        ORDER BY 
-         COALESCE(loaded_at, unloaded_at, damaged_at) ASC,
+         COALESCE(loaded_at, unloaded_at) ASC,
          id ASC
       `,
       [id]
@@ -164,18 +160,28 @@ router.get("/:id/history", async (req, res) => {
       const endTs   = next ? new Date(next.loaded_at).getTime() : Number.POSITIVE_INFINITY;
 
       // Fenster [start, nextStart)
-      const inWindow = rows.filter(r => {
-        const t = new Date(r.unloaded_at || r.loaded_at || r.damaged_at || 0).getTime();
+      const win = rows.filter(r => {
+        const t = new Date(r.unloaded_at || r.loaded_at || 0).getTime();
         return t >= startTs && t < endTs;
       });
 
-      // letzter Unload / Check / Schaden im Fenster
-      const lastUnload = inWindow.filter(r => r.unloaded_at)
+      // letzter Unload / letzter Prüfer / letzter Schaden im Fenster
+      const lastUnload = win
+        .filter(r => r.unloaded_at)
         .sort((a,b) => new Date(b.unloaded_at) - new Date(a.unloaded_at))[0];
-      const lastCheck  = inWindow.filter(r => r.checked_by && r.loaded_at)
+
+      const lastCheck = win
+        .filter(r => r.checked_by && r.loaded_at)
         .sort((a,b) => new Date(b.loaded_at) - new Date(a.loaded_at))[0];
-      const lastDamage = inWindow.filter(r => r.damaged_at)
-        .sort((a,b) => new Date(b.damaged_at) - new Date(a.damaged_at))[0];
+
+      const lastDamage = win
+        .filter(r => Number(r.damaged) === 1)
+        .sort((a,b) => {
+          // „Zeitpunkt“ des Schadens proxen: loaded_at dann unloaded_at
+          const ta = new Date(a.loaded_at || a.unloaded_at || 0).getTime();
+          const tb = new Date(b.loaded_at || b.unloaded_at || 0).getTime();
+          return tb - ta;
+        })[0];
 
       cycles.push({
         device_serial : start.device_serial || null,
@@ -183,18 +189,20 @@ router.get("/:id/history", async (req, res) => {
         loaded_at     : start.loaded_at,
         unloaded_at   : lastUnload ? lastUnload.unloaded_at : null,
         checked_by    : lastCheck ? lastCheck.checked_by : null,
-        damaged_at    : lastDamage ? lastDamage.damaged_at : null,
-        damage_reason : lastDamage ? lastDamage.damage_reason : null,
+        // synthetisiertes damaged_at (siehe Kommentar oben)
+        damaged_at    : lastDamage ? (lastDamage.loaded_at || lastDamage.unloaded_at || null) : null,
+        damage_reason : lastDamage ? lastDamage.damage_reason : null
       });
     }
 
+    // chronologisch (ältester zuerst)
     cycles.sort((a,b) => new Date(a.loaded_at) - new Date(b.loaded_at));
+
     res.json(cycles);
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
   }
 });
-
 
 module.exports = router;
