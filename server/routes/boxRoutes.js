@@ -3,6 +3,7 @@ const router = require("express").Router();
 const db = require("../db");
 const dayjs = require("dayjs");
 
+/* -------- Status-Automat -------- */
 const NEXT = {
   available   : "departed",
   departed    : "returned",
@@ -11,11 +12,11 @@ const NEXT = {
   damaged     : "available",
 };
 
-/* Helpers: Validierungen */
+/* -------- Helper: Validierungen -------- */
 function isValidDeviceSerial(serial) { return /^[A-Z0-9]{4}-\d{2}$/i.test(serial); }
 function isValidPccId(pcc)           { return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc); }
 
-/* --------- GET /api/boxes --------- */
+/* -------------------- GET /api/boxes -------------------- */
 router.get("/", async (_req, res) => {
   const boxes = await db.all(`
     SELECT id, serial, status, cycles, maintenance_count,
@@ -27,7 +28,7 @@ router.get("/", async (_req, res) => {
   res.json(boxes);
 });
 
-/* --------- GET /api/boxes/:id --------- */
+/* -------------------- GET /api/boxes/:id -------------------- */
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const box = await db.get(`SELECT * FROM boxes WHERE id=?`, [id]);
@@ -35,7 +36,7 @@ router.get("/:id", async (req, res) => {
   res.json(box);
 });
 
-/* --------- PATCH /api/boxes/:id/nextStatus --------- */
+/* -------------------- PATCH /api/boxes/:id/nextStatus -------------------- */
 router.patch("/:id/nextStatus", async (req, res) => {
   const { id } = req.params;
   const { device_serial, pcc_id, inspector, damaged, damage_reason } = req.body;
@@ -45,7 +46,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
   let next = NEXT[box.status];
 
-  // Rückkehr-Entscheidung
+  // Entscheidung nach Rückkehr
   if (box.status === "returned") {
     if (!inspector) return res.status(400).json({ message: "Prüfer-Kürzel fehlt" });
     if (damaged === true)      next = "damaged";
@@ -65,9 +66,9 @@ router.patch("/:id/nextStatus", async (req, res) => {
     db.raw.exec("BEGIN");
     const now = dayjs().toISOString();
 
-    /* Statt generischem Snapshot: gezielte History-Events */
+    /* --- History-Events präzise protokollieren --- */
     if (next === "departed") {
-      // Start eines Zyklus -> loaded_at
+      // Start Zyklus
       db.raw.prepare(`
         INSERT INTO box_history (box_id, device_serial, pcc_id, loaded_at)
         VALUES (?, ?, ?, ?)
@@ -75,7 +76,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
 
     if (next === "returned") {
-      // Ende eines Zyklus -> unloaded_at (Prüfer kommt später)
+      // Ende Zyklus (nur entladen)
       db.raw.prepare(`
         INSERT INTO box_history (box_id, unloaded_at)
         VALUES (?, ?)
@@ -83,14 +84,19 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
 
     if (["available","maintenance","damaged"].includes(next) && box.status === "returned") {
-      // Prüfabschluss -> Prüfer (und evtl. beschädigt) als eigenes Event
+      // Prüfabschluss (Prüfer + evtl. Beschädigung)
       db.raw.prepare(`
         INSERT INTO box_history (box_id, checked_by, damaged, damage_reason)
         VALUES (?, ?, ?, ?)
-      `).run(box.id, inspector || null, next === "damaged" ? 1 : 0, next === "damaged" ? (damage_reason || null) : null);
+      `).run(
+        box.id,
+        inspector || null,
+        next === "damaged" ? 1 : 0,
+        next === "damaged" ? (damage_reason || null) : null
+      );
     }
 
-    /* Box aktualisieren */
+    /* --- Box-Objekt updaten --- */
     let cyclesInc = 0, maintInc = 0;
     let setCols = `status=?`;
     const args = [next];
@@ -125,7 +131,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
 
     if (next === "available") {
-      // Reset der Nutzdaten
+      // zurücksetzen
       setCols += `,
         device_serial=NULL, pcc_id=NULL,
         loaded_at=NULL, unloaded_at=NULL, checked_by=NULL,
@@ -151,18 +157,18 @@ router.patch("/:id/nextStatus", async (req, res) => {
   }
 });
 
-/* --------- GET /api/boxes/:id/history ---------
-   Zyklus = distinct loaded_at (rn=1) bis vor nächsten loaded_at.
-   In diesem Fenster:
-     - letzte unloaded_at
-     - letzte checked_by
-     - damaged = 1, reason falls vorhanden
-------------------------------------------------- */
+/* -------------------- GET /api/boxes/:id/history --------------------
+   Zyklus = DISTINCT loaded_at (erste Zeile je Zeitpunkt).
+   Im Zeitfenster [start, next_start):
+     - letztes unloaded_at
+     - letzter checked_by
+     - damaged + damage_reason (falls gesetzt)
+--------------------------------------------------------------------- */
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const rows = await db.all(
+    const cycles = await db.all(
       `
 WITH load_rows AS (
   SELECT
@@ -190,7 +196,7 @@ paired AS (
     l.pcc_id,
     l.start_at AS loaded_at,
 
-    /* Letztes Entladen im Fenster */
+    /* letztes Entladen im Fenster */
     (
       SELECT u.unloaded_at
       FROM box_history u
@@ -202,46 +208,46 @@ paired AS (
       LIMIT 1
     ) AS unloaded_at,
 
-    /* Letzter Prüfer im Fenster */
+    /* letzter Prüfer im Fenster */
     (
       SELECT up.checked_by
       FROM box_history up
       WHERE up.box_id = ?
         AND up.checked_by IS NOT NULL
-        AND (
-          -- zeitlich zwischen Start und nächstem Start,
-          -- wir benutzen COALESCE, weil Prüf-Events keinen Zeitstempel haben
-          1 = 1
-        )
-        AND EXISTS (
-          SELECT 1
-          FROM box_history t
-          WHERE t.box_id = up.box_id
+        AND up.id = (
+          SELECT up2.id
+          FROM box_history up2
+          WHERE up2.box_id = up.box_id
+            AND up2.checked_by IS NOT NULL
             AND (
-              (t.unloaded_at IS NOT NULL AND t.unloaded_at >= l.start_at AND (l.next_start_at IS NULL OR t.unloaded_at < l.next_start_at))
-              OR (t.loaded_at  IS NOT NULL AND t.loaded_at  >= l.start_at AND (l.next_start_at IS NULL OR t.loaded_at  < l.next_start_at))
+              (up2.unloaded_at IS NOT NULL AND up2.unloaded_at >= l.start_at AND (l.next_start_at IS NULL OR up2.unloaded_at < l.next_start_at))
+              OR (up2.loaded_at  IS NOT NULL AND up2.loaded_at  >= l.start_at AND (l.next_start_at IS NULL OR up2.loaded_at  < l.next_start_at))
+              OR (up2.checked_by IS NOT NULL) -- reine Prüfevents ohne Zeit -> trotzdem berücksichtigen, dann per MAX(id)
             )
-            AND t.id = up.id
+          ORDER BY up2.id DESC
+          LIMIT 1
         )
-      ORDER BY up.id DESC
       LIMIT 1
     ) AS checked_by,
 
-    /* Beschädigung im Fenster? */
+    /* Beschädigung + Grund aus Prüfabschluss im Fenster */
     (
-      SELECT MAX(dh.damaged) -- 0/1
+      SELECT COALESCE(MAX(dh.damaged),0)
       FROM box_history dh
       WHERE dh.box_id = ?
         AND dh.damaged IS NOT NULL
-        AND EXISTS (
-          SELECT 1
-          FROM box_history t
-          WHERE t.box_id = dh.box_id
+        AND dh.id = (
+          SELECT dh2.id
+          FROM box_history dh2
+          WHERE dh2.box_id = dh.box_id
+            AND dh2.damaged IS NOT NULL
             AND (
-              (t.unloaded_at IS NOT NULL AND t.unloaded_at >= l.start_at AND (l.next_start_at IS NULL OR t.unloaded_at < l.next_start_at))
-              OR (t.loaded_at  IS NOT NULL AND t.loaded_at  >= l.start_at AND (l.next_start_at IS NULL OR t.loaded_at  < l.next_start_at))
+              (dh2.unloaded_at IS NOT NULL AND dh2.unloaded_at >= l.start_at AND (l.next_start_at IS NULL OR dh2.unloaded_at < l.next_start_at))
+              OR (dh2.loaded_at  IS NOT NULL AND dh2.loaded_at  >= l.start_at AND (l.next_start_at IS NULL OR dh2.loaded_at  < l.next_start_at))
+              OR (dh2.checked_by IS NOT NULL)
             )
-            AND t.id = dh.id
+          ORDER BY dh2.id DESC
+          LIMIT 1
         )
     ) AS damaged,
 
@@ -250,15 +256,18 @@ paired AS (
       FROM box_history dh
       WHERE dh.box_id = ?
         AND dh.damaged = 1
-        AND EXISTS (
-          SELECT 1
-          FROM box_history t
-          WHERE t.box_id = dh.box_id
+        AND dh.id = (
+          SELECT dh2.id
+          FROM box_history dh2
+          WHERE dh2.box_id = dh.box_id
+            AND dh2.damaged = 1
             AND (
-              (t.unloaded_at IS NOT NULL AND t.unloaded_at >= l.start_at AND (l.next_start_at IS NULL OR t.unloaded_at < l.next_start_at))
-              OR (t.loaded_at  IS NOT NULL AND t.loaded_at  >= l.start_at AND (l.next_start_at IS NULL OR t.loaded_at  < l.next_start_at))
+              (dh2.unloaded_at IS NOT NULL AND dh2.unloaded_at >= l.start_at AND (l.next_start_at IS NULL OR dh2.unloaded_at < l.next_start_at))
+              OR (dh2.loaded_at  IS NOT NULL AND dh2.loaded_at  >= l.start_at AND (l.next_start_at IS NULL OR dh2.loaded_at  < l.next_start_at))
+              OR (dh2.checked_by IS NOT NULL)
             )
-            AND t.id = dh.id
+          ORDER BY dh2.id DESC
+          LIMIT 1
         )
       ORDER BY dh.id DESC
       LIMIT 1
@@ -275,7 +284,7 @@ ORDER BY loaded_at ASC
       [id, id, id, id, id]
     );
 
-    res.json(rows);
+    res.json(cycles);
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
