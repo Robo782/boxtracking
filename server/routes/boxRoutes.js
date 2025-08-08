@@ -131,6 +131,10 @@ router.patch("/:id/nextStatus", async (req, res) => {
    Zyklus = Zeitraum von loaded_at bis zum nächsten loaded_at.
    Wir laden rohe History-Einträge und bauen die Zyklen in JS zusammen.
 --------------------------------------------------------------------- */
+/* -------------------- GET /api/boxes/:id/history --------------------
+   Zyklus = Zeitraum von loaded_at bis zum nächsten loaded_at.
+   Wir laden rohe History-Einträge und bauen die Zyklen in JS zusammen.
+--------------------------------------------------------------------- */
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
   try {
@@ -149,58 +153,48 @@ router.get("/:id/history", async (req, res) => {
       [id]
     );
 
-    // Alle distinct loaded_at als Zyklus-Startpunkte
+    // Startpunkte = alle Einträge mit loaded_at
     const starts = rows.filter(r => r.loaded_at);
 
     const cycles = [];
     for (let i = 0; i < starts.length; i++) {
       const start = starts[i];
-      const next   = starts[i + 1]; // nächster Zyklus-Start
+      const next  = starts[i + 1];
       const startTs = new Date(start.loaded_at).getTime();
       const endTs   = next ? new Date(next.loaded_at).getTime() : Number.POSITIVE_INFINITY;
 
-      // Fenster: alle Einträge mit Timestamp in [start.loaded_at, next.loaded_at)
-      const win = rows.filter(r => {
-        const t = new Date(
-          r.unloaded_at || r.loaded_at || r.damaged_at || 0
-        ).getTime();
+      // Fenster [start, nextStart)
+      const inWindow = rows.filter(r => {
+        const t = new Date(r.unloaded_at || r.loaded_at || r.damaged_at || 0).getTime();
         return t >= startTs && t < endTs;
       });
 
-      // letztes Entladen im Fenster
-      const unloaded = [...win]
-        .filter(r => r.unloaded_at)
+      // letzter Unload / Check / Schaden im Fenster
+      const lastUnload = inWindow.filter(r => r.unloaded_at)
         .sort((a,b) => new Date(b.unloaded_at) - new Date(a.unloaded_at))[0];
-
-      // letzter Prüfer im Fenster
-      const checked  = [...win]
-        .filter(r => r.checked_by && r.loaded_at) // Prüfung wird bei loaded gespeichert
+      const lastCheck  = inWindow.filter(r => r.checked_by && r.loaded_at)
         .sort((a,b) => new Date(b.loaded_at) - new Date(a.loaded_at))[0];
-
-      // letzter Schaden im Fenster
-      const damaged  = [...win]
-        .filter(r => r.damaged_at)
+      const lastDamage = inWindow.filter(r => r.damaged_at)
         .sort((a,b) => new Date(b.damaged_at) - new Date(a.damaged_at))[0];
 
       cycles.push({
         device_serial : start.device_serial || null,
         pcc_id        : start.pcc_id || null,
         loaded_at     : start.loaded_at,
-        unloaded_at   : unloaded ? unloaded.unloaded_at : null,
-        checked_by    : checked ? checked.checked_by : null,
-        damaged_at    : damaged ? damaged.damaged_at : null,
-        damage_reason : damaged ? damaged.damage_reason : null
+        unloaded_at   : lastUnload ? lastUnload.unloaded_at : null,
+        checked_by    : lastCheck ? lastCheck.checked_by : null,
+        damaged_at    : lastDamage ? lastDamage.damaged_at : null,
+        damage_reason : lastDamage ? lastDamage.damage_reason : null,
       });
     }
 
-    // chronologisch (ältester zuerst) – sollte es ohnehin schon sein
     cycles.sort((a,b) => new Date(a.loaded_at) - new Date(b.loaded_at));
-
     res.json(cycles);
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
   }
 });
+
 
 module.exports = router;
