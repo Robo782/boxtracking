@@ -127,94 +127,74 @@ router.patch("/:id/nextStatus", async (req, res) => {
      - letzter checked_by
      - damaged + damage_reason (falls gesetzt)
 --------------------------------------------------------------------- */
+/* -------------------- GET /api/boxes/:id/history --------------------
+   Zyklus = Zeitraum von loaded_at bis zum nächsten loaded_at.
+   Wir laden rohe History-Einträge und bauen die Zyklen in JS zusammen.
+--------------------------------------------------------------------- */
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
-
   try {
-    const cycles = await db.all(
+    // Alle History-Einträge der Box laden (älteste zuerst)
+    const rows = await db.all(
       `
-WITH load_rows AS (
-  SELECT
-    bh.id,
-    bh.box_id,
-    bh.device_serial,
-    bh.pcc_id,
-    bh.loaded_at,
-    ROW_NUMBER() OVER (PARTITION BY bh.loaded_at ORDER BY bh.id) AS rn
-  FROM box_history bh
-  WHERE bh.box_id = ?
-    AND bh.loaded_at IS NOT NULL
-),
-starts AS (
-  SELECT
-    lr.id,
-    lr.device_serial,
-    lr.pcc_id,
-    lr.loaded_at AS start_at,
-    LEAD(lr.loaded_at) OVER (ORDER BY lr.loaded_at, lr.id) AS next_start_at
-  FROM load_rows lr
-  WHERE lr.rn = 1
-),
-paired AS (
-  SELECT
-    l.device_serial,
-    l.pcc_id,
-    l.start_at AS loaded_at,
-
-    /* letztes Entladen im Fenster */
-    (
-      SELECT u.unloaded_at
-      FROM box_history u
-      WHERE u.box_id = ?
-        AND u.unloaded_at IS NOT NULL
-        AND u.unloaded_at >= l.start_at
-        AND (l.next_start_at IS NULL OR u.unloaded_at < l.next_start_at)
-      ORDER BY u.unloaded_at DESC, u.id DESC
-      LIMIT 1
-    ) AS unloaded_at,
-
-    /* letzter Prüfer im Fenster */
-    (
-      SELECT c.checked_by
-      FROM box_history c
-      WHERE c.box_id = ?
-        AND c.checked_by IS NOT NULL
-        AND c.loaded_at >= l.start_at
-        AND (l.next_start_at IS NULL OR c.loaded_at < l.next_start_at)
-      ORDER BY c.loaded_at DESC, c.id DESC
-      LIMIT 1
-    ) AS checked_by,
-
-    /* Schaden im Fenster */
-    (
-      SELECT d.damaged_at
-      FROM box_history d
-      WHERE d.box_id = ?
-        AND d.damaged_at IS NOT NULL
-        AND d.loaded_at >= l.start_at
-        AND (l.next_start_at IS NULL OR d.loaded_at < l.next_start_at)
-      ORDER BY d.damaged_at DESC, d.id DESC
-      LIMIT 1
-    ) AS damaged_at,
-
-    (
-      SELECT d.damage_reason
-      FROM box_history d
-      WHERE d.box_id = ?
-        AND d.damage_reason IS NOT NULL
-        AND d.loaded_at >= l.start_at
-        AND (l.next_start_at IS NULL OR d.loaded_at < l.next_start_at)
-      ORDER BY d.damaged_at DESC, d.id DESC
-      LIMIT 1
-    ) AS damage_reason
-  FROM starts l
-)
-SELECT *
-FROM paired
-ORDER BY loaded_at ASC
+      SELECT id, box_id, device_serial, pcc_id,
+             loaded_at, unloaded_at, checked_by,
+             damaged_at, damage_reason
+        FROM box_history
+       WHERE box_id = ?
+       ORDER BY 
+         COALESCE(loaded_at, unloaded_at, damaged_at) ASC,
+         id ASC
       `,
-      [id, id, id, id, id]
+      [id]
     );
+
+    // Alle distinct loaded_at als Zyklus-Startpunkte
+    const starts = rows.filter(r => r.loaded_at);
+
+    const cycles = [];
+    for (let i = 0; i < starts.length; i++) {
+      const start = starts[i];
+      const next   = starts[i + 1]; // nächster Zyklus-Start
+      const startTs = new Date(start.loaded_at).getTime();
+      const endTs   = next ? new Date(next.loaded_at).getTime() : Number.POSITIVE_INFINITY;
+
+      // Fenster: alle Einträge mit Timestamp in [start.loaded_at, next.loaded_at)
+      const win = rows.filter(r => {
+        const t = new Date(
+          r.unloaded_at || r.loaded_at || r.damaged_at || 0
+        ).getTime();
+        return t >= startTs && t < endTs;
+      });
+
+      // letztes Entladen im Fenster
+      const unloaded = [...win]
+        .filter(r => r.unloaded_at)
+        .sort((a,b) => new Date(b.unloaded_at) - new Date(a.unloaded_at))[0];
+
+      // letzter Prüfer im Fenster
+      const checked  = [...win]
+        .filter(r => r.checked_by && r.loaded_at) // Prüfung wird bei loaded gespeichert
+        .sort((a,b) => new Date(b.loaded_at) - new Date(a.loaded_at))[0];
+
+      // letzter Schaden im Fenster
+      const damaged  = [...win]
+        .filter(r => r.damaged_at)
+        .sort((a,b) => new Date(b.damaged_at) - new Date(a.damaged_at))[0];
+
+      cycles.push({
+        device_serial : start.device_serial || null,
+        pcc_id        : start.pcc_id || null,
+        loaded_at     : start.loaded_at,
+        unloaded_at   : unloaded ? unloaded.unloaded_at : null,
+        checked_by    : checked ? checked.checked_by : null,
+        damaged_at    : damaged ? damaged.damaged_at : null,
+        damage_reason : damaged ? damaged.damage_reason : null
+      });
+    }
+
+    // chronologisch (ältester zuerst) – sollte es ohnehin schon sein
+    cycles.sort((a,b) => new Date(a.loaded_at) - new Date(b.loaded_at));
 
     res.json(cycles);
   } catch (err) {
