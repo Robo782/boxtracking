@@ -8,15 +8,14 @@ export default function BoxHistory() {
   const [serial, setSerial] = useState(null);
 
   useEffect(() => {
-    api.get(`/boxes/${id}`).then((box) => {
-      setSerial(box.serial);
-    });
+    // Seriennummer für Überschrift
+    api.get(`/boxes/${id}`)
+      .then(box => setSerial(box.serial))
+      .catch(() => setSerial(id));
 
+    // Zyklen sind jetzt bereits serverseitig korrekt gruppiert
     api.get(`/boxes/${id}/history`)
-      .then(data => {
-        const prepared = data.map((e, i) => ({ ...e, zyklus: i + 1 }));
-        setEntries(prepared);
-      })
+      .then(data => setEntries(data.map((e, i) => ({ ...e, zyklus: i + 1 }))))
       .catch(err => {
         console.error("History-Fehler:", err);
         setEntries([]);
@@ -24,10 +23,8 @@ export default function BoxHistory() {
   }, [id]);
 
   return (
-    <section className="max-w-3xl mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold mb-6">
-        Verlauf Box {serial ?? id}
-      </h1>
+    <section className="max-w-4xl mx-auto p-6 space-y-6">
+      <h1 className="text-3xl font-bold mb-6">Verlauf Box {serial ?? id}</h1>
 
       {!entries.length && (
         <p className="text-gray-400">Keine Einträge gefunden.</p>
@@ -38,8 +35,8 @@ export default function BoxHistory() {
           <h2 className="font-semibold text-lg mb-2">Zyklus {e.zyklus}</h2>
           <p><strong>SN:</strong> {e.device_serial || "–"}</p>
           <p><strong>ID:</strong> {e.pcc_id || "–"}</p>
-          <p><strong>Beladen:</strong> {formatDate(e.loaded_at)}</p>
-          <p><strong>Entladen:</strong> {formatDate(e.unloaded_at)}</p>
+          <p><strong>Beladen:</strong> {fmt(e.loaded_at)}</p>
+          <p><strong>Entladen:</strong> {fmt(e.unloaded_at)}</p>
           <p><strong>Geprüft von:</strong> {e.checked_by || "–"}</p>
         </div>
       ))}
@@ -47,8 +44,8 @@ export default function BoxHistory() {
   );
 }
 
-function formatDate(date) {
-  if (!date) return "–";
-  const d = new Date(date);
-  return d.toLocaleDateString("de-DE") + ", " + d.toLocaleTimeString("de-DE");
+function fmt(dt) {
+  if (!dt) return "–";
+  const d = new Date(dt);
+  return isNaN(d) ? "–" : `${d.toLocaleDateString("de-DE")}, ${d.toLocaleTimeString("de-DE")}`;
 }
