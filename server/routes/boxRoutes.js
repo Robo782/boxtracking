@@ -17,9 +17,7 @@ function isValidPccId(pcc) {
   return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc);
 }
 
-/* ------------------------------------------------------------------ */
-/* GET /api/boxes                                                     */
-/* ------------------------------------------------------------------ */
+/* ---------------- GET /api/boxes ---------------- */
 router.get("/", async (_req, res) => {
   const boxes = await db.all(`
     SELECT id, serial, status, cycles, maintenance_count,
@@ -31,9 +29,7 @@ router.get("/", async (_req, res) => {
   res.json(boxes);
 });
 
-/* ------------------------------------------------------------------ */
-/* GET /api/boxes/:id                                                 */
-/* ------------------------------------------------------------------ */
+/* ---------------- GET /api/boxes/:id ---------------- */
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const box = await db.get(`SELECT * FROM boxes WHERE id = ?`, [id]);
@@ -41,10 +37,7 @@ router.get("/:id", async (req, res) => {
   res.json(box);
 });
 
-/* ------------------------------------------------------------------ */
-/* PATCH /api/boxes/:id/nextStatus                                    */
-/*  – behält deine bestehende Logik bei                               */
-/* ------------------------------------------------------------------ */
+/* ---------------- PATCH /api/boxes/:id/nextStatus ---------------- */
 router.patch("/:id/nextStatus", async (req, res) => {
   const { id } = req.params;
   const {
@@ -91,7 +84,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
   try {
     db.raw.exec("BEGIN");
 
-    // Snapshot des alten Zustands in die History
+    // Snapshot des aktuellen Zustands in die History
     db.raw.prepare(`
       INSERT INTO box_history
           (box_id, device_serial, pcc_id,
@@ -164,55 +157,61 @@ router.patch("/:id/nextStatus", async (req, res) => {
   }
 });
 
-/* ------------------------------------------------------------------ */
-/* GET /api/boxes/:id/history                                         */
-/*  -> NEU: Zyklus = von loaded_at bis VOR den nächsten loaded_at.    */
-/*     Das passende unloaded_at wird im Fenster dazwischen gesucht.   */
-/* ------------------------------------------------------------------ */
+/* ---------------- GET /api/boxes/:id/history ----------------
+   * NEU: Zyklen rein in SQL berechnet
+   * - Zyklus = loaded_at bis VOR nächsten loaded_at
+   * - unloaded_at = letztes entladen in diesem Fenster (falls vorhanden)
+---------------------------------------------------------------- */
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Alle History-Zeilen in zeitlicher Reihenfolge.
-    // Wir verwenden COALESCE, weil manche Zeilen nur loaded_at oder nur unloaded_at tragen.
-    const rows = await db.all(`
-      SELECT id, device_serial, pcc_id, loaded_at, unloaded_at, checked_by
-        FROM box_history
-       WHERE box_id = ?
-       ORDER BY COALESCE(loaded_at, unloaded_at) ASC, id ASC
-    `, [id]);
-
-    // Indizes aller Lade-Starts (Cycle-Anfänge)
-    const loadIdx = [];
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i].loaded_at) loadIdx.push(i);
-    }
-
-    const cycles = [];
-
-    for (let i = 0; i < loadIdx.length; i++) {
-      const startIndex = loadIdx[i];
-      const endIndex = (i + 1 < loadIdx.length) ? loadIdx[i + 1] : rows.length;
-
-      const startRow = rows[startIndex];
-
-      // Suche das letzte unloaded_at zwischen startIndex (exklusiv) und endIndex (exklusiv)
-      let unloadRow = null;
-      for (let j = endIndex - 1; j > startIndex; j--) {
-        if (rows[j].unloaded_at) {
-          unloadRow = rows[j];
-          break;
-        }
-      }
-
-      cycles.push({
-        device_serial: startRow.device_serial || "–",
-        pcc_id      : startRow.pcc_id || "–",
-        loaded_at   : startRow.loaded_at || null,
-        unloaded_at : unloadRow ? unloadRow.unloaded_at : null,
-        checked_by  : unloadRow ? (unloadRow.checked_by || "–") : "–",
-      });
-    }
+    const cycles = await db.all(
+      `
+WITH loads AS (
+  SELECT
+    bh.id,
+    bh.device_serial,
+    bh.pcc_id,
+    bh.loaded_at AS start_at,
+    LEAD(bh.loaded_at) OVER (ORDER BY bh.loaded_at) AS next_start_at
+  FROM box_history bh
+  WHERE bh.box_id = ? AND bh.loaded_at IS NOT NULL
+),
+paired AS (
+  SELECT
+    l.device_serial,
+    l.pcc_id,
+    l.start_at     AS loaded_at,
+    -- letztes entladen zwischen start und next_start
+    (
+      SELECT u.unloaded_at
+      FROM box_history u
+      WHERE u.box_id = ?
+        AND u.unloaded_at IS NOT NULL
+        AND u.unloaded_at >= l.start_at
+        AND (l.next_start_at IS NULL OR u.unloaded_at < l.next_start_at)
+      ORDER BY u.unloaded_at DESC
+      LIMIT 1
+    ) AS unloaded_at,
+    (
+      SELECT u.checked_by
+      FROM box_history u
+      WHERE u.box_id = ?
+        AND u.unloaded_at IS NOT NULL
+        AND u.unloaded_at >= l.start_at
+        AND (l.next_start_at IS NULL OR u.unloaded_at < l.next_start_at)
+      ORDER BY u.unloaded_at DESC
+      LIMIT 1
+    ) AS checked_by
+  FROM loads l
+)
+SELECT device_serial, pcc_id, loaded_at, unloaded_at, checked_by
+FROM paired
+ORDER BY loaded_at ASC
+      `,
+      [id, id, id]
+    );
 
     res.json(cycles);
   } catch (err) {

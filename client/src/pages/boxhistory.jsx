@@ -8,14 +8,12 @@ export default function BoxHistory() {
   const [serial, setSerial] = useState(null);
 
   useEffect(() => {
-    // Seriennummer für Überschrift
     api.get(`/boxes/${id}`)
       .then(box => setSerial(box.serial))
       .catch(() => setSerial(id));
 
-    // Zyklen sind jetzt bereits serverseitig korrekt gruppiert
     api.get(`/boxes/${id}/history`)
-      .then(data => setEntries(data.map((e, i) => ({ ...e, zyklus: i + 1 }))))
+      .then(list => setEntries(list.map((e, i) => ({ ...e, zyklus: i + 1 }))))
       .catch(err => {
         console.error("History-Fehler:", err);
         setEntries([]);
@@ -26,11 +24,9 @@ export default function BoxHistory() {
     <section className="max-w-4xl mx-auto p-6 space-y-6">
       <h1 className="text-3xl font-bold mb-6">Verlauf Box {serial ?? id}</h1>
 
-      {!entries.length && (
-        <p className="text-gray-400">Keine Einträge gefunden.</p>
-      )}
+      {!entries.length && <p className="text-gray-400">Keine Einträge gefunden.</p>}
 
-      {entries.map((e) => (
+      {entries.map(e => (
         <div key={e.zyklus} className="p-4 border border-base-300 rounded bg-base-100 shadow">
           <h2 className="font-semibold text-lg mb-2">Zyklus {e.zyklus}</h2>
           <p><strong>SN:</strong> {e.device_serial || "–"}</p>
@@ -44,8 +40,8 @@ export default function BoxHistory() {
   );
 }
 
-function fmt(dt) {
-  if (!dt) return "–";
-  const d = new Date(dt);
-  return isNaN(d) ? "–" : `${d.toLocaleDateString("de-DE")}, ${d.toLocaleTimeString("de-DE")}`;
+function fmt(x) {
+  if (!x) return "–";
+  const d = new Date(x);
+  return Number.isNaN(+d) ? "–" : `${d.toLocaleDateString("de-DE")}, ${d.toLocaleTimeString("de-DE")}`;
 }
