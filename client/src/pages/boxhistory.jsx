@@ -34,6 +34,11 @@ export default function BoxHistory() {
           <p><strong>Beladen:</strong> {fmt(e.loaded_at)}</p>
           <p><strong>Entladen:</strong> {fmt(e.unloaded_at)}</p>
           <p><strong>Geprüft von:</strong> {e.checked_by || "–"}</p>
+          {e.damaged ? (
+            <p className="text-error mt-1"><strong>Beschädigt:</strong> Ja{e.damage_reason ? ` – ${e.damage_reason}` : ""}</p>
+          ) : (
+            <p className="opacity-70 mt-1"><strong>Beschädigt:</strong> Nein</p>
+          )}
         </div>
       ))}
     </section>
