@@ -166,24 +166,37 @@ router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
 
   try {
+    // 1) loads: distinct Startpunkte (pro loaded_at nur die ERSTE Zeile)
+    // 2) next_start_at: nächster DISTINCT-Start via LEAD()
+    // 3) Für jedes Fenster [start_at, next_start_at) das letzte unloaded_at + checked_by bestimmen
     const cycles = await db.all(
       `
-WITH loads AS (
+WITH load_rows AS (
   SELECT
     bh.id,
     bh.device_serial,
     bh.pcc_id,
-    bh.loaded_at AS start_at,
-    LEAD(bh.loaded_at) OVER (ORDER BY bh.loaded_at) AS next_start_at
+    bh.loaded_at,
+    ROW_NUMBER() OVER (PARTITION BY bh.loaded_at ORDER BY bh.id) AS rn
   FROM box_history bh
   WHERE bh.box_id = ? AND bh.loaded_at IS NOT NULL
+),
+loads AS (
+  SELECT
+    lr.id,
+    lr.device_serial,
+    lr.pcc_id,
+    lr.loaded_at AS start_at,
+    LEAD(lr.loaded_at) OVER (ORDER BY lr.loaded_at, lr.id) AS next_start_at
+  FROM load_rows lr
+  WHERE lr.rn = 1           -- ← DISTINCT loaded_at
 ),
 paired AS (
   SELECT
     l.device_serial,
     l.pcc_id,
-    l.start_at     AS loaded_at,
-    -- letztes entladen zwischen start und next_start
+    l.start_at   AS loaded_at,
+    -- letztes Entladen im Fenster [start_at, next_start_at)
     (
       SELECT u.unloaded_at
       FROM box_history u
@@ -219,5 +232,6 @@ ORDER BY loaded_at ASC
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
   }
 });
+
 
 module.exports = router;
