@@ -17,16 +17,46 @@ function isValidDeviceSerial(serial) { return /^[A-Z0-9]{4}-\d{2}$/i.test(serial
 function isValidPccId(pcc)           { return /^pcc\s\d{5}\s[a-zA-Z]{2,3}$/i.test(pcc); }
 
 /* -------------------- GET /api/boxes -------------------- */
-router.get("/", async (_req, res) => {
-  const boxes = await db.all(`
-    SELECT id, serial, status, cycles, maintenance_count,
-           device_serial, pcc_id, checked_by,
-           damaged_at, damage_reason
-      FROM boxes
-     ORDER BY serial
-  `);
-  res.json(boxes);
+router.get("/", async (req, res) => {
+  try {
+    const { search } = req.query;
+    const lim = Number.isFinite(Number(req.query.limit)) ? Math.max(1, Math.min(500, Number(req.query.limit))) : null;
+    const off = Number.isFinite(Number(req.query.offset)) ? Math.max(0, Number(req.query.offset)) : 0;
+
+    const params = [];
+    let sql = `
+      SELECT id, serial, status, cycles, maintenance_count,
+             device_serial, pcc_id, checked_by,
+             damaged_at, damage_reason
+        FROM boxes
+    `;
+
+    if (search && String(search).trim().length > 0) {
+      sql += `
+        WHERE
+          LOWER(serial)           LIKE '%' || LOWER(?) || '%'
+          OR LOWER(pcc_id)        LIKE '%' || LOWER(?) || '%'
+          OR LOWER(device_serial) LIKE '%' || LOWER(?) || '%'
+      `;
+      const term = String(search).trim();
+      params.push(term, term, term);
+    }
+
+    sql += ` ORDER BY serial `;
+
+    if (lim) {
+      sql += ` LIMIT ? OFFSET ? `;
+      params.push(lim, off);
+    }
+
+    const boxes = await db.all(sql, params);
+    res.json(boxes);
+  } catch (err) {
+    console.error("GET /boxes failed:", err);
+    res.status(500).json({ error: "Failed to fetch boxes" });
+  }
 });
+
 
 /* -------------------- GET /api/boxes/:id -------------------- */
 router.get("/:id", async (req, res) => {
