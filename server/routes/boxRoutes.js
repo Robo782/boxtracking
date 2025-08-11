@@ -55,7 +55,11 @@ router.get("/", async (req, res) => {
     }
 
     sql += ` ORDER BY b.serial `;
-    if (lim) { sql += ` LIMIT ? OFFSET ? `; params.push(lim, off); }
+
+    if (lim) {
+      sql += ` LIMIT ? OFFSET ? `;
+      params.push(lim, off);
+    }
 
     const boxes = await db.all(sql, params);
     res.json(boxes);
@@ -280,39 +284,23 @@ router.get("/:id/history", async (req, res) => {
       const startTs = new Date(start.loaded_at).getTime();
       const endTs   = next ? new Date(next.loaded_at).getTime() : Number.POSITIVE_INFINITY;
 
-      const inWindow = rows.filter(r => {
+      const win = rows.filter(r => {
         const t = new Date(r.unloaded_at || r.loaded_at || 0).getTime();
         return t >= startTs && t < endTs;
       });
 
-      const lastUnload = inWindow
-        .filter(r => r.unloaded_at)
+      const lastUnload = win.filter(r => r.unloaded_at)
         .sort((a,b) => new Date(b.unloaded_at) - new Date(a.unloaded_at))[0];
 
-      const lastCheck = inWindow
-        .filter(r => r.checked_by && r.loaded_at)
+      const lastCheck = win.filter(r => r.checked_by && r.loaded_at)
         .sort((a,b) => new Date(b.loaded_at) - new Date(a.loaded_at))[0];
 
-      const lastDamage = inWindow
-        .filter(r => Number(r.damaged) === 1)
+      const lastDamage = win.filter(r => Number(r.damaged) === 1)
         .sort((a,b) => {
           const ta = new Date(a.loaded_at || a.unloaded_at || 0).getTime();
           const tb = new Date(b.loaded_at || b.unloaded_at || 0).getTime();
           return tb - ta;
         })[0];
-
-      // damaged-Flag & Zeitpunkt bestimmen
-      const isDamaged = !!lastDamage;
-      // Standard: wir nehmen den Zeitpunkt der Inspektion, wenn wir ihn haben (aus boxes.damaged_at, nur sinnvoll für den neuesten beschädigten Zyklus)
-      let damaged_at = null;
-      if (isDamaged) {
-        if (i === starts.length - 1 && box && box.damaged_at) {
-          damaged_at = box.damaged_at;
-        } else {
-          // Fallback: ein sinnvoller Zeitanker im Zyklus
-          damaged_at = (lastUnload && lastUnload.unloaded_at) || start.loaded_at || null;
-        }
-      }
 
       cycles.push({
         device_serial : start.device_serial || null,
@@ -320,8 +308,8 @@ router.get("/:id/history", async (req, res) => {
         loaded_at     : start.loaded_at,
         unloaded_at   : lastUnload ? lastUnload.unloaded_at : null,
         checked_by    : lastCheck ? lastCheck.checked_by : null,
-        damaged       : isDamaged ? 1 : 0,
-        damaged_at    : damaged_at,
+        damaged       : lastDamage ? 1 : 0,
+        damaged_at    : lastDamage ? ( (i === starts.length - 1 && box && box.damaged_at) ? box.damaged_at : (lastUnload && lastUnload.unloaded_at) || start.loaded_at ) : null,
         damage_reason : lastDamage ? lastDamage.damage_reason : null
       });
     }
@@ -331,6 +319,128 @@ router.get("/:id/history", async (req, res) => {
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
+  }
+});
+
+/* ==================== ADMIN: Direkter Box-Editor ====================
+   Geschützte Endpunkte unter /api/boxes/admin[/:id]
+   - GET    /api/boxes/admin?search=…    -> Liste (inkl. History-Suche)
+   - POST   /api/boxes/admin             -> neue Box
+   - PATCH  /api/boxes/admin/:id         -> Felder aktualisieren (Whitelist)
+   - DELETE /api/boxes/admin/:id         -> Box + History löschen
+===================================================================== */
+const { requireAuth, requireAdmin } = (() => {
+  try { return require('../middleware/authMiddleware'); }
+  catch { return { requireAuth: (_req,_res,next)=>next(), requireAdmin: (_req,_res,next)=>next() }; }
+})();
+
+const ADMIN_ALLOWED = new Set([
+  'serial','status','cycles','maintenance_count',
+  'device_serial','pcc_id','checked_by','damaged_at','damage_reason'
+]);
+
+function buildSetClauseAdmin(payload) {
+  const sets = []; const values = [];
+  for (const [k,v] of Object.entries(payload||{})) {
+    if (!ADMIN_ALLOWED.has(k)) continue;
+    sets.push(`${k} = ?`);
+    values.push(v ?? null);
+  }
+  if (!sets.length) return null;
+  return { sets: sets.join(', '), values };
+}
+
+// GET /api/boxes/admin
+router.get('/admin', requireAuth, requireAdmin, async (req,res) => {
+  try {
+    const { search } = req.query;
+    const params = [];
+    let sql = `
+      SELECT id, serial, status, cycles, maintenance_count,
+             device_serial, pcc_id, checked_by, damaged_at, damage_reason
+        FROM boxes b
+    `;
+    if (search && String(search).trim()) {
+      const term = String(search).trim();
+      sql += `
+        WHERE
+          LOWER(b.serial)           LIKE '%' || LOWER(?) || '%'
+          OR LOWER(b.pcc_id)        LIKE '%' || LOWER(?) || '%'
+          OR LOWER(b.device_serial) LIKE '%' || LOWER(?) || '%'
+          OR EXISTS (
+                SELECT 1 FROM box_history h
+                 WHERE h.box_id = b.id
+                   AND (LOWER(h.device_serial) LIKE '%' || LOWER(?) || '%'
+                     OR LOWER(h.pcc_id)        LIKE '%' || LOWER(?) || '%')
+          )
+      `;
+      params.push(term,term,term,term,term);
+    }
+    sql += ` ORDER BY b.serial`;
+    const rows = await db.all(sql, params);
+    res.json(rows);
+  } catch (err) {
+    console.error('[ADMIN boxes list]', err);
+    res.status(500).json({ error: 'List failed' });
+  }
+});
+
+// POST /api/boxes/admin
+router.post('/admin', requireAuth, requireAdmin, async (req,res) => {
+  try {
+    const payload = req.body || {};
+    if (!payload.serial || !String(payload.serial).trim()) {
+      return res.status(400).json({ error: 'serial required' });
+    }
+    const valid = {};
+    for (const k of ADMIN_ALLOWED) if (payload[k] !== undefined) valid[k] = payload[k];
+    valid.status = valid.status || 'available';
+    valid.cycles = Number.isFinite(+valid.cycles) ? +valid.cycles : 0;
+    valid.maintenance_count = Number.isFinite(+valid.maintenance_count) ? +valid.maintenance_count : 0;
+    const cols = Object.keys(valid);
+    const placeholders = cols.map(()=>'?').join(', ');
+    await db.run(`INSERT INTO boxes (${cols.join(', ')}) VALUES (${placeholders})`, cols.map(k=>valid[k]));
+    const row = await db.get(`SELECT id, serial, status, cycles, maintenance_count,
+                                     device_serial, pcc_id, checked_by, damaged_at, damage_reason
+                                FROM boxes WHERE serial = ?
+                            ORDER BY id DESC LIMIT 1`, [String(payload.serial).trim()]);
+    res.status(201).json(row);
+  } catch (err) {
+    console.error('[ADMIN boxes create]', err);
+    res.status(500).json({ error: 'Create failed' });
+  }
+});
+
+// PATCH /api/boxes/admin/:id
+router.patch('/admin/:id', requireAuth, requireAdmin, async (req,res) => {
+  try {
+    const { id } = req.params;
+    const built = buildSetClauseAdmin(req.body || {});
+    if (!built) return res.status(400).json({ error: 'No valid fields' });
+    const exist = await db.get('SELECT id FROM boxes WHERE id=?', [id]);
+    if (!exist) return res.status(404).json({ error: 'Not found' });
+    await db.run(`UPDATE boxes SET ${built.sets} WHERE id=?`, [...built.values, id]);
+    const row = await db.get(`SELECT id, serial, status, cycles, maintenance_count,
+                                     device_serial, pcc_id, checked_by, damaged_at, damage_reason
+                                FROM boxes WHERE id=?`, [id]);
+    res.json(row);
+  } catch (err) {
+    console.error('[ADMIN boxes update]', err);
+    res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+// DELETE /api/boxes/admin/:id
+router.delete('/admin/:id', requireAuth, requireAdmin, async (req,res) => {
+  try {
+    const { id } = req.params;
+    await db.run('DELETE FROM box_history WHERE box_id=?', [id]);
+    const r = await db.run('DELETE FROM boxes WHERE id=?', [id]);
+    if ((r && r.changes) === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('[ADMIN boxes delete]', err);
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 
