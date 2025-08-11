@@ -50,7 +50,7 @@ export default function BoxDbAdmin() {
         <div className="grow" />
         <input
           className="input input-bordered w-72"
-          placeholder="Suchen … (Serial, PCC, Device, inkl. Historie)"
+          placeholder="Suchen … (Serial, PCC, Device – inkl. Historie)"
           value={q}
           onChange={e => setQ(e.target.value)}
         />
@@ -203,7 +203,6 @@ function CreateDialog({ onClose, onCreate }) {
   );
 }
 
-// helpers
 function diff(a, b) {
   const out = {};
   Object.keys(b).forEach(k => { if (b[k] !== a[k]) out[k] = b[k]; });

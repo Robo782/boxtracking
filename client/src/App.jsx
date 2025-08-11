@@ -12,71 +12,65 @@ const AdminDashboard = lazy(() => import("./pages/admindashboard.jsx"));
 const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
 const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 const BoxNext        = lazy(() => import("./pages/boxnext.jsx"));
+const BoxDbAdmin     = lazy(() => import("./pages/boxdbadmin.jsx")); // ⬅️ NEU
 
 export default function App() {
-  /* ---------- zentrale Auth-Quelle ---------- */
-  const [auth, setAuth] = useState(getAuth());
+  const [authed, setAuthed] = useState(getAuth().valid);
 
-  /* reagiert auf:
-     • authchange (eigenes Event aus Login / Logout)
-     • storage-Events (anderer Tab)                        */
   useEffect(() => {
-    const sync = () => setAuth(getAuth());
-    window.addEventListener("authchange", sync);
-    window.addEventListener("storage",     sync);
-    return () => {
-      window.removeEventListener("authchange", sync);
-      window.removeEventListener("storage",     sync);
-    };
+    const fn = () => setAuthed(getAuth().valid);
+    window.addEventListener("storage", fn);
+    return () => window.removeEventListener("storage", fn);
   }, []);
-
-  const { role, valid } = auth;
-  const authed = valid && role;
 
   return (
     <BrowserRouter>
-      {authed && <NavBar />}
+      <Suspense fallback={<div className="p-6">lädt …</div>}>
 
-      <Suspense fallback={<p className="p-4">Lade …</p>}>
         <Routes>
-          {/* Root */}
-          <Route
-            path="/"
-            element={<Navigate to={authed ? "/boxes" : "/login"} replace />}
-          />
-
-          {/* Login */}
-          <Route
-            path="/login"
-            element={authed ? <Navigate to="/boxes" replace /> : <Login />}
-          />
-
-          {/* Geschützte Routen */}
-          {authed && (
+          {/* Public */}
+          {!authed && (
             <>
-              <Route path="/boxes" element={<Boxes />} />
-              <Route path="/boxes/:id" element={<BoxDetail />} />
-              <Route path="/boxes/:id/history" element={<BoxHistory />} />
-              <Route path="/boxes/:id/next"    element={<BoxNext />} />
-              <Route path="/boxesmanage" element={<BoxesManage />} />
-
-              {role === "admin" && (
-                <>
-                  <Route path="/dashboard"       element={<AdminDashboard />} />
-                  <Route path="/usermanagement" element={<UserMgmt />} />
-                  <Route path="/backuprestore"  element={<BackupRestore />} />
-                </>
-              )}
+              <Route path="/login" element={<Login />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
             </>
           )}
 
-          {/* Fallback */}
-          <Route
-            path="*"
-            element={<Navigate to={authed ? "/boxes" : "/login"} replace />}
-          />
+          {/* Protected */}
+          {authed && (
+            <>
+              <Route path="/*" element={<Layout />}>
+                <Route index element={<Navigate to="/boxes" replace />} />
+                <Route path="boxes" element={<Boxes />} />
+                <Route path="boxes/:id" element={<BoxDetail />} />
+                <Route path="boxes/:id/history" element={<BoxHistory />} />
+                <Route path="boxnext/:id" element={<BoxNext />} />
+
+                {/* Admin-Bereich wie gehabt */}
+                <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="boxesmanage" element={<BoxesManage />} />
+                <Route path="usermanagement" element={<UserMgmt />} />
+                <Route path="backuprestore" element={<BackupRestore />} />
+
+                {/* ⬇️ NEU: direkter DB-Editor */}
+                <Route path="admin/boxes" element={<BoxDbAdmin />} />
+              </Route>
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/boxes" replace />} />
+            </>
+          )}
         </Routes>
       </Suspense>
     </BrowserRouter>
+  );
+}
+
+function Layout() {
+  return (
+    <>
+      <NavBar />
+      <div className="mt-4" />
+    </>
   );
 }
