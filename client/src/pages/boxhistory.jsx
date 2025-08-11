@@ -7,6 +7,7 @@ export default function BoxHistory() {
   const { id } = useParams();
   const [entries, setEntries] = useState([]);
   const [serial, setSerial] = useState(null);
+  const [err, setErr] = useState(null);
 
   useEffect(() => {
     api.get(`/boxes/${id}`)
@@ -14,34 +15,43 @@ export default function BoxHistory() {
       .catch(() => setSerial(id));
 
     api.get(`/boxes/${id}/history`)
-      .then(list => setEntries(list.map((e, i) => ({ ...e, zyklus: i + 1 }))))
-      .catch(err => {
-        console.error("History-Fehler:", err);
-        setEntries([]);
-      });
+      .then(setEntries)
+      .catch(e => setErr(e?.message || "Verlauf konnte nicht geladen werden"));
   }, [id]);
 
   return (
-    <section className="max-w-5xl mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold mb-6">Verlauf Box {serial ?? id}</h1>
+    <section className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-2xl font-semibold mb-4">Verlauf Box {serial ?? id}</h1>
 
-      {!entries.length && <p className="text-gray-400">Keine Einträge gefunden.</p>}
+      {err && <p className="text-red-400 mb-4">History-Fehler: {err}</p>}
+      {!err && entries.length === 0 && <p>Keine Einträge gefunden.</p>}
 
-      {entries.map(e => (
-        <div key={e.zyklus} className="p-5 border border-base-300 rounded bg-base-100 shadow">
-          <h2 className="font-semibold text-xl mb-3">Zyklus {e.zyklus}</h2>
-          <p><strong>SN:</strong> {e.device_serial || "–"}</p>
-          <p><strong>ID:</strong> {e.pcc_id || "–"}</p>
-          <p><strong>Beladen:</strong> {fmt(e.loaded_at)}</p>
-          <p><strong>Entladen:</strong> {fmt(e.unloaded_at)}</p>
-          <p><strong>Geprüft von:</strong> {e.checked_by || "–"}</p>
-          {e.damaged ? (
-            <p className="text-error"><strong>Beschädigt:</strong> Ja{e.damage_reason ? ` – ${e.damage_reason}` : ""}</p>
-          ) : (
-            <p className="opacity-70"><strong>Beschädigt:</strong> Nein</p>
-          )}
-        </div>
-      ))}
+      {entries.map((e, i) => {
+        const isDamaged = Number(e.damaged) === 1 || !!e.damage_reason || !!e.damaged_at;
+        return (
+          <div key={i} className="card bg-base-200 p-4 mb-3">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <p><strong>Beladen:</strong> {fmt(e.loaded_at)}</p>
+              <p><strong>Entladen:</strong> {fmt(e.unloaded_at)}</p>
+              <p><strong>Gerät:</strong> {e.device_serial || "–"}</p>
+              <p><strong>PCC-ID:</strong> {e.pcc_id || "–"}</p>
+              <p><strong>Prüfer:</strong> {e.checked_by || "–"}</p>
+            </div>
+
+            <div className="mt-2">
+              {isDamaged ? (
+                <p className="text-red-400">
+                  <strong>Beschädigt:</strong> Ja
+                  {e.damaged_at && <> &nbsp;(<em>{fmt(e.damaged_at)}</em>)</>}
+                  {e.damage_reason && <> — Grund: <em>{e.damage_reason}</em></>}
+                </p>
+              ) : (
+                <p className="opacity-70"><strong>Beschädigt:</strong> Nein</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </section>
   );
 }

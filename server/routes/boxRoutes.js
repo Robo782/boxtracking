@@ -7,9 +7,9 @@ const dayjs = require("dayjs");
 const NEXT = {
   available   : "departed",
   departed    : "returned",
-  returned    : "available",   // Default – in der Logik unten überschreiben wir bei 'damaged'
+  returned    : "available",   // Standard; wird unten bei 'damaged' überschrieben
   maintenance : "available",
-  damaged     : "available",   // manuelle Freigabe möglich; nicht automatisch bei Prüfung
+  damaged     : "available",   // nach manueller Freigabe
 };
 
 /* -------- Helper: Validierungen -------- */
@@ -152,14 +152,13 @@ router.patch("/:id/nextStatus", async (req, res) => {
       next = "returned";
     }
 
-    /* returned -> inspection -> available ODER damaged */
+    /* returned -> (Prüfung) -> available | damaged */
     else if (status === "returned") {
       if (!isInspector(inspector)) throw new Error("Prüfer fehlt");
 
       const when = nowIso();
 
       if (damaged) {
-        // -> Box bleibt NICHT available, sondern wird 'damaged'
         if (typeof damage_reason !== "string" || damage_reason.trim().length < 3)
           throw new Error("Schadensbegründung fehlt/zu kurz");
 
@@ -191,7 +190,6 @@ router.patch("/:id/nextStatus", async (req, res) => {
 
         next = "damaged";
       } else {
-        // alle Prüfpunkte müssen bestätigt sein
         if (!checklist1 || !checklist2 || !checklist3)
           throw new Error("Alle Prüfpunkte müssen bestätigt sein");
 
@@ -225,13 +223,14 @@ router.patch("/:id/nextStatus", async (req, res) => {
       }
     }
 
+    /* maintenance -> available */
     else if (status === "maintenance") {
       await db.run(`UPDATE boxes SET status='available' WHERE id=?`, [id]);
       next = "available";
     }
 
+    /* damaged -> available (manuelle Freigabe nach Reparatur) */
     else if (status === "damaged") {
-      // Manuelle Freigabe nach Reparatur
       await db.run(`UPDATE boxes SET status='available' WHERE id=?`, [id]);
       next = "available";
     }
@@ -245,10 +244,21 @@ router.patch("/:id/nextStatus", async (req, res) => {
   }
 });
 
-/* -------------------- GET /api/boxes/:id/history -------------------- */
+/* -------------------- GET /api/boxes/:id/history --------------------
+   Zyklus = Zeitraum von loaded_at bis zum nächsten loaded_at.
+   -> Aggregation in JS (keine Window-Funktionen).
+   -> Liefert zusätzlich: damaged (0/1), damaged_at (logischer Zeitpunkt), damage_reason.
+--------------------------------------------------------------------- */
 router.get("/:id/history", async (req, res) => {
   const { id } = req.params;
   try {
+    // aktuelle Box (für damaged_at des neuesten beschädigten Zyklus)
+    const box = await db.get(
+      `SELECT damaged_at FROM boxes WHERE id = ?`,
+      [id]
+    );
+
+    // rohe History (älteste zuerst)
     const rows = await db.all(
       `
       SELECT id, box_id, device_serial, pcc_id,
@@ -270,23 +280,39 @@ router.get("/:id/history", async (req, res) => {
       const startTs = new Date(start.loaded_at).getTime();
       const endTs   = next ? new Date(next.loaded_at).getTime() : Number.POSITIVE_INFINITY;
 
-      const win = rows.filter(r => {
+      const inWindow = rows.filter(r => {
         const t = new Date(r.unloaded_at || r.loaded_at || 0).getTime();
         return t >= startTs && t < endTs;
       });
 
-      const lastUnload = win.filter(r => r.unloaded_at)
+      const lastUnload = inWindow
+        .filter(r => r.unloaded_at)
         .sort((a,b) => new Date(b.unloaded_at) - new Date(a.unloaded_at))[0];
 
-      const lastCheck = win.filter(r => r.checked_by && r.loaded_at)
+      const lastCheck = inWindow
+        .filter(r => r.checked_by && r.loaded_at)
         .sort((a,b) => new Date(b.loaded_at) - new Date(a.loaded_at))[0];
 
-      const lastDamage = win.filter(r => Number(r.damaged) === 1)
+      const lastDamage = inWindow
+        .filter(r => Number(r.damaged) === 1)
         .sort((a,b) => {
           const ta = new Date(a.loaded_at || a.unloaded_at || 0).getTime();
           const tb = new Date(b.loaded_at || b.unloaded_at || 0).getTime();
           return tb - ta;
         })[0];
+
+      // damaged-Flag & Zeitpunkt bestimmen
+      const isDamaged = !!lastDamage;
+      // Standard: wir nehmen den Zeitpunkt der Inspektion, wenn wir ihn haben (aus boxes.damaged_at, nur sinnvoll für den neuesten beschädigten Zyklus)
+      let damaged_at = null;
+      if (isDamaged) {
+        if (i === starts.length - 1 && box && box.damaged_at) {
+          damaged_at = box.damaged_at;
+        } else {
+          // Fallback: ein sinnvoller Zeitanker im Zyklus
+          damaged_at = (lastUnload && lastUnload.unloaded_at) || start.loaded_at || null;
+        }
+      }
 
       cycles.push({
         device_serial : start.device_serial || null,
@@ -294,7 +320,8 @@ router.get("/:id/history", async (req, res) => {
         loaded_at     : start.loaded_at,
         unloaded_at   : lastUnload ? lastUnload.unloaded_at : null,
         checked_by    : lastCheck ? lastCheck.checked_by : null,
-        damaged_at    : lastDamage ? (lastDamage.loaded_at || lastDamage.unloaded_at || null) : null,
+        damaged       : isDamaged ? 1 : 0,
+        damaged_at    : damaged_at,
         damage_reason : lastDamage ? lastDamage.damage_reason : null
       });
     }
