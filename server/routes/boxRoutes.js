@@ -7,9 +7,9 @@ const dayjs = require("dayjs");
 const NEXT = {
   available   : "departed",
   departed    : "returned",
-  returned    : "available",   // <- wichtig: nach Prüfung geht es zu 'available'
+  returned    : "available",   // Default – in der Logik unten überschreiben wir bei 'damaged'
   maintenance : "available",
-  damaged     : "available",
+  damaged     : "available",   // manuelle Freigabe möglich; nicht automatisch bei Prüfung
 };
 
 /* -------- Helper: Validierungen -------- */
@@ -152,19 +152,20 @@ router.patch("/:id/nextStatus", async (req, res) => {
       next = "returned";
     }
 
-    /* returned -> available (Prüfung abschließen) */
+    /* returned -> inspection -> available ODER damaged */
     else if (status === "returned") {
       if (!isInspector(inspector)) throw new Error("Prüfer fehlt");
 
       const when = nowIso();
 
       if (damaged) {
+        // -> Box bleibt NICHT available, sondern wird 'damaged'
         if (typeof damage_reason !== "string" || damage_reason.trim().length < 3)
           throw new Error("Schadensbegründung fehlt/zu kurz");
 
         await db.run(
           `UPDATE boxes
-              SET status = 'available',
+              SET status = 'damaged',
                   checked_by = ?,
                   cycles = cycles + 1,
                   damaged_at = ?,
@@ -187,7 +188,10 @@ router.patch("/:id/nextStatus", async (req, res) => {
             )`,
           [inspector.trim(), damage_reason.trim(), id]
         );
+
+        next = "damaged";
       } else {
+        // alle Prüfpunkte müssen bestätigt sein
         if (!checklist1 || !checklist2 || !checklist3)
           throw new Error("Alle Prüfpunkte müssen bestätigt sein");
 
@@ -216,9 +220,9 @@ router.patch("/:id/nextStatus", async (req, res) => {
             )`,
           [inspector.trim(), id]
         );
-      }
 
-      next = "available";
+        next = "available";
+      }
     }
 
     else if (status === "maintenance") {
@@ -227,14 +231,13 @@ router.patch("/:id/nextStatus", async (req, res) => {
     }
 
     else if (status === "damaged") {
+      // Manuelle Freigabe nach Reparatur
       await db.run(`UPDATE boxes SET status='available' WHERE id=?`, [id]);
       next = "available";
     }
 
     db.raw.exec("COMMIT");
-
-    // ⬅️ Wichtig: exakt das liefern, was dein Frontend erwartet
-    res.json({ next });
+    res.json({ next }); // Frontend erwartet { next }
   } catch (e) {
     db.raw.exec("ROLLBACK");
     console.error("[BOX NEXT STATUS ERROR]", e);
