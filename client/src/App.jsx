@@ -1,5 +1,6 @@
+// client/src/App.jsx
 import React, { Suspense, lazy, useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { getAuth } from "./utils/auth.js";
 
 const NavBar         = lazy(() => import("./components/NavBar.jsx"));
@@ -12,21 +13,20 @@ const AdminDashboard = lazy(() => import("./pages/admindashboard.jsx"));
 const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
 const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 const BoxNext        = lazy(() => import("./pages/boxnext.jsx"));
-const BoxDbAdmin     = lazy(() => import("./pages/boxdbadmin.jsx")); // ⬅️ NEU
+const BoxDbAdmin     = lazy(() => import("./pages/boxdbadmin.jsx")); // NEU
 
 export default function App() {
-  const [authed, setAuthed] = useState(getAuth().valid);
+  const [authed, setAuthed] = useState(Boolean(getAuth().valid));
 
   useEffect(() => {
-    const fn = () => setAuthed(getAuth().valid);
-    window.addEventListener("storage", fn);
-    return () => window.removeEventListener("storage", fn);
+    const onStorage = () => setAuthed(Boolean(getAuth().valid));
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   return (
     <BrowserRouter>
       <Suspense fallback={<div className="p-6">lädt …</div>}>
-
         <Routes>
           {/* Public */}
           {!authed && (
@@ -39,21 +39,21 @@ export default function App() {
           {/* Protected */}
           {authed && (
             <>
-              <Route path="/*" element={<Layout />}>
+              <Route element={<Layout />}>
                 <Route index element={<Navigate to="/boxes" replace />} />
-                <Route path="boxes" element={<Boxes />} />
-                <Route path="boxes/:id" element={<BoxDetail />} />
-                <Route path="boxes/:id/history" element={<BoxHistory />} />
-                <Route path="boxnext/:id" element={<BoxNext />} />
+                <Route path="/boxes" element={<Boxes />} />
+                <Route path="/boxes/:id" element={<BoxDetail />} />
+                <Route path="/boxes/:id/history" element={<BoxHistory />} />
+                <Route path="/boxnext/:id" element={<BoxNext />} />
 
-                {/* Admin-Bereich wie gehabt */}
-                <Route path="dashboard" element={<AdminDashboard />} />
-                <Route path="boxesmanage" element={<BoxesManage />} />
-                <Route path="usermanagement" element={<UserMgmt />} />
-                <Route path="backuprestore" element={<BackupRestore />} />
+                {/* Admin-Bereich (bestehende Seiten) */}
+                <Route path="/dashboard" element={<AdminDashboard />} />
+                <Route path="/boxesmanage" element={<BoxesManage />} />
+                <Route path="/usermanagement" element={<UserMgmt />} />
+                <Route path="/backuprestore" element={<BackupRestore />} />
 
-                {/* ⬇️ NEU: direkter DB-Editor */}
-                <Route path="admin/boxes" element={<BoxDbAdmin />} />
+                {/* NEU: direkter DB-Editor */}
+                <Route path="/admin/boxes" element={<BoxDbAdmin />} />
               </Route>
 
               {/* Fallback */}
@@ -70,7 +70,10 @@ function Layout() {
   return (
     <>
       <NavBar />
-      <div className="mt-4" />
+      {/* WICHTIG: ohne Outlet werden Kinder nicht gerendert */}
+      <main className="mt-4">
+        <Outlet />
+      </main>
     </>
   );
 }
