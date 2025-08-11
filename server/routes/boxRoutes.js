@@ -3,11 +3,11 @@ const router = require("express").Router();
 const db = require("../db");
 const dayjs = require("dayjs");
 
-/* -------- Status-Automat (nur Default-Wechsel) -------- */
+/* -------- Status-Automat -------- */
 const NEXT = {
   available   : "departed",
   departed    : "returned",
-  returned    : null,        // wird in Logik auf 'available' gehoben nach Prüfung
+  returned    : "available",   // <- wichtig: nach Prüfung geht es zu 'available'
   maintenance : "available",
   damaged     : "available",
 };
@@ -55,11 +55,7 @@ router.get("/", async (req, res) => {
     }
 
     sql += ` ORDER BY b.serial `;
-
-    if (lim) {
-      sql += ` LIMIT ? OFFSET ? `;
-      params.push(lim, off);
-    }
+    if (lim) { sql += ` LIMIT ? OFFSET ? `; params.push(lim, off); }
 
     const boxes = await db.all(sql, params);
     res.json(boxes);
@@ -100,6 +96,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     const box = await db.get(`SELECT * FROM boxes WHERE id = ?`, [id]);
     if (!box) throw new Error("Box nicht gefunden");
 
+    let next = null;
     const status = box.status;
 
     /* available -> departed (Beladen) */
@@ -124,6 +121,8 @@ router.patch("/:id/nextStatus", async (req, res) => {
          VALUES (?, ?, ?, ?, 0, NULL)`,
         [id, device_serial.trim(), pcc_id.trim(), when]
       );
+
+      next = "departed";
     }
 
     /* departed -> returned (Entladen) */
@@ -137,7 +136,6 @@ router.patch("/:id/nextStatus", async (req, res) => {
         [id]
       );
 
-      // letztes offenes Load schließen
       await db.run(
         `UPDATE box_history
             SET unloaded_at = ?
@@ -150,6 +148,8 @@ router.patch("/:id/nextStatus", async (req, res) => {
           )`,
         [when, id]
       );
+
+      next = "returned";
     }
 
     /* returned -> available (Prüfung abschließen) */
@@ -188,7 +188,6 @@ router.patch("/:id/nextStatus", async (req, res) => {
           [inspector.trim(), damage_reason.trim(), id]
         );
       } else {
-        // Checkliste muss vollständig sein
         if (!checklist1 || !checklist2 || !checklist3)
           throw new Error("Alle Prüfpunkte müssen bestätigt sein");
 
@@ -218,36 +217,24 @@ router.patch("/:id/nextStatus", async (req, res) => {
           [inspector.trim(), id]
         );
       }
+
+      next = "available";
     }
 
     else if (status === "maintenance") {
-      // Maintenance -> available
-      await db.run(
-        `UPDATE boxes SET status='available' WHERE id=?`,
-        [id]
-      );
+      await db.run(`UPDATE boxes SET status='available' WHERE id=?`, [id]);
+      next = "available";
     }
 
     else if (status === "damaged") {
-      // damaged -> available (manuell freigegeben)
-      await db.run(
-        `UPDATE boxes SET status='available' WHERE id=?`,
-        [id]
-      );
+      await db.run(`UPDATE boxes SET status='available' WHERE id=?`, [id]);
+      next = "available";
     }
 
     db.raw.exec("COMMIT");
 
-    // aktualisierten Box-Datensatz zurückgeben (UI kann sofort updaten)
-    const updated = await db.get(
-      `SELECT id, serial, status, cycles, maintenance_count,
-              device_serial, pcc_id, checked_by,
-              damaged_at, damage_reason
-         FROM boxes WHERE id = ?`,
-      [id]
-    );
-
-    res.json(updated);
+    // ⬅️ Wichtig: exakt das liefern, was dein Frontend erwartet
+    res.json({ next });
   } catch (e) {
     db.raw.exec("ROLLBACK");
     console.error("[BOX NEXT STATUS ERROR]", e);
