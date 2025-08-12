@@ -64,6 +64,125 @@ router.get("/", async (req, res) => {
   }
 });
 
+/* ================== ADMIN: CRUD direkt auf boxes ==================
+   WICHTIG: vor '/:id' registrieren, sonst fängt ':id' 'admin' ab!
+=================================================================== */
+const ADMIN_ALLOWED = new Set([
+  'serial','status','cycles','maintenance_count',
+  'device_serial','pcc_id','checked_by','damaged_at','damage_reason'
+]);
+
+function buildSetAdmin(payload) {
+  const sets = []; const values = [];
+  for (const [k,v] of Object.entries(payload || {})) {
+    if (!ADMIN_ALLOWED.has(k)) continue;
+    sets.push(`${k} = ?`);
+    values.push(v ?? null);
+  }
+  if (!sets.length) return null;
+  return { sets: sets.join(', '), values };
+}
+
+/* GET /api/boxes/admin?search=… */
+router.get("/admin", async (req,res) => {
+  try {
+    const { search } = req.query;
+    const params = [];
+    let sql = `
+      SELECT id, serial, status, cycles, maintenance_count,
+             device_serial, pcc_id, checked_by, damaged_at, damage_reason
+        FROM boxes b
+    `;
+    if (search && String(search).trim()) {
+      const term = String(search).trim();
+      sql += `
+        WHERE
+          LOWER(b.serial)           LIKE '%' || LOWER(?) || '%'
+          OR LOWER(b.pcc_id)        LIKE '%' || LOWER(?) || '%'
+          OR LOWER(b.device_serial) LIKE '%' || LOWER(?) || '%'
+          OR EXISTS (
+                SELECT 1 FROM box_history h
+                 WHERE h.box_id = b.id
+                   AND (LOWER(h.device_serial) LIKE '%' || LOWER(?) || '%'
+                     OR LOWER(h.pcc_id)        LIKE '%' || LOWER(?) || '%')
+          )
+      `;
+      params.push(term,term,term,term,term);
+    }
+    sql += ` ORDER BY b.serial`;
+    res.json(await db.all(sql, params));
+  } catch (err) {
+    console.error('[ADMIN boxes list]', err);
+    res.status(500).json({ error: 'List failed' });
+  }
+});
+
+/* POST /api/boxes/admin */
+router.post("/admin", async (req,res) => {
+  try {
+    const p = req.body || {};
+    if (!p.serial || !String(p.serial).trim()) return res.status(400).json({ error: "serial required" });
+
+    const valid = {};
+    for (const k of ADMIN_ALLOWED) if (p[k] !== undefined) valid[k] = p[k];
+    valid.status = valid.status || 'available';
+    valid.cycles = Number.isFinite(+valid.cycles) ? +valid.cycles : 0;
+    valid.maintenance_count = Number.isFinite(+valid.maintenance_count) ? +valid.maintenance_count : 0;
+
+    const cols = Object.keys(valid);
+    const placeholders = cols.map(()=>"?").join(", ");
+    await db.run(`INSERT INTO boxes (${cols.join(", ")}) VALUES (${placeholders})`, cols.map(k=>valid[k]));
+
+    const row = await db.get(
+      `SELECT id, serial, status, cycles, maintenance_count,
+              device_serial, pcc_id, checked_by, damaged_at, damage_reason
+         FROM boxes WHERE serial = ?
+     ORDER BY id DESC LIMIT 1`, [String(p.serial).trim()]
+    );
+    res.status(201).json(row);
+  } catch (err) {
+    console.error('[ADMIN boxes create]', err);
+    res.status(500).json({ error: 'Create failed' });
+  }
+});
+
+/* PATCH /api/boxes/admin/:id */
+router.patch("/admin/:id", async (req,res) => {
+  try {
+    const { id } = req.params;
+    const built = buildSetAdmin(req.body || {});
+    if (!built) return res.status(400).json({ error: "No valid fields" });
+
+    const exist = await db.get(`SELECT id FROM boxes WHERE id=?`, [id]);
+    if (!exist) return res.status(404).json({ error: "Not found" });
+
+    await db.run(`UPDATE boxes SET ${built.sets} WHERE id=?`, [...built.values, id]);
+    const row = await db.get(
+      `SELECT id, serial, status, cycles, maintenance_count,
+              device_serial, pcc_id, checked_by, damaged_at, damage_reason
+         FROM boxes WHERE id=?`, [id]
+    );
+    res.json(row);
+  } catch (err) {
+    console.error('[ADMIN boxes update]', err);
+    res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+/* DELETE /api/boxes/admin/:id */
+router.delete("/admin/:id", async (req,res) => {
+  try {
+    const { id } = req.params;
+    await db.run("DELETE FROM box_history WHERE box_id = ?", [id]);
+    const r = await db.run("DELETE FROM boxes WHERE id = ?", [id]);
+    if ((r && r.changes) === 0) return res.status(404).json({ error: "Not found" });
+    res.status(204).end();
+  } catch (err) {
+    console.error('[ADMIN boxes delete]', err);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
 /* -------------------- GET /api/boxes/:id -------------------- */
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
@@ -126,10 +245,7 @@ router.patch("/:id/nextStatus", async (req, res) => {
     else if (status === "departed") {
       const when = nowIso();
 
-      await db.run(
-        `UPDATE boxes SET status = 'returned' WHERE id = ?`,
-        [id]
-      );
+      await db.run(`UPDATE boxes SET status = 'returned' WHERE id = ?`, [id]);
 
       await db.run(
         `UPDATE box_history
@@ -307,123 +423,6 @@ router.get("/:id/history", async (req, res) => {
   } catch (err) {
     console.error("[GET /:id/history]", err);
     res.status(500).json({ message: "Verlauf konnte nicht geladen werden" });
-  }
-});
-
-/* ================== ADMIN: CRUD direkt auf boxes ================== */
-const ADMIN_ALLOWED = new Set([
-  'serial','status','cycles','maintenance_count',
-  'device_serial','pcc_id','checked_by','damaged_at','damage_reason'
-]);
-
-function buildSetAdmin(payload) {
-  const sets = []; const values = [];
-  for (const [k,v] of Object.entries(payload || {})) {
-    if (!ADMIN_ALLOWED.has(k)) continue;
-    sets.push(`${k} = ?`);
-    values.push(v ?? null);
-  }
-  if (!sets.length) return null;
-  return { sets: sets.join(', '), values };
-}
-
-/* GET /api/boxes/admin?search=… */
-router.get("/admin", async (req,res) => {
-  try {
-    const { search } = req.query;
-    const params = [];
-    let sql = `
-      SELECT id, serial, status, cycles, maintenance_count,
-             device_serial, pcc_id, checked_by, damaged_at, damage_reason
-        FROM boxes b
-    `;
-    if (search && String(search).trim()) {
-      const term = String(search).trim();
-      sql += `
-        WHERE
-          LOWER(b.serial)           LIKE '%' || LOWER(?) || '%'
-          OR LOWER(b.pcc_id)        LIKE '%' || LOWER(?) || '%'
-          OR LOWER(b.device_serial) LIKE '%' || LOWER(?) || '%'
-          OR EXISTS (
-                SELECT 1 FROM box_history h
-                 WHERE h.box_id = b.id
-                   AND (LOWER(h.device_serial) LIKE '%' || LOWER(?) || '%'
-                     OR LOWER(h.pcc_id)        LIKE '%' || LOWER(?) || '%')
-          )
-      `;
-      params.push(term,term,term,term,term);
-    }
-    sql += ` ORDER BY b.serial`;
-    res.json(await db.all(sql, params));
-  } catch (err) {
-    console.error('[ADMIN boxes list]', err);
-    res.status(500).json({ error: 'List failed' });
-  }
-});
-
-/* POST /api/boxes/admin */
-router.post("/admin", async (req,res) => {
-  try {
-    const p = req.body || {};
-    if (!p.serial || !String(p.serial).trim()) return res.status(400).json({ error: "serial required" });
-
-    const valid = {};
-    for (const k of ADMIN_ALLOWED) if (p[k] !== undefined) valid[k] = p[k];
-    valid.status = valid.status || 'available';
-    valid.cycles = Number.isFinite(+valid.cycles) ? +valid.cycles : 0;
-    valid.maintenance_count = Number.isFinite(+valid.maintenance_count) ? +valid.maintenance_count : 0;
-
-    const cols = Object.keys(valid);
-    const placeholders = cols.map(()=>"?").join(", ");
-    await db.run(`INSERT INTO boxes (${cols.join(", ")}) VALUES (${placeholders})`, cols.map(k=>valid[k]));
-
-    const row = await db.get(
-      `SELECT id, serial, status, cycles, maintenance_count,
-              device_serial, pcc_id, checked_by, damaged_at, damage_reason
-         FROM boxes WHERE serial = ?
-     ORDER BY id DESC LIMIT 1`, [String(p.serial).trim()]
-    );
-    res.status(201).json(row);
-  } catch (err) {
-    console.error('[ADMIN boxes create]', err);
-    res.status(500).json({ error: 'Create failed' });
-  }
-});
-
-/* PATCH /api/boxes/admin/:id */
-router.patch("/admin/:id", async (req,res) => {
-  try {
-    const { id } = req.params;
-    const built = buildSetAdmin(req.body || {});
-    if (!built) return res.status(400).json({ error: "No valid fields" });
-
-    const exist = await db.get(`SELECT id FROM boxes WHERE id=?`, [id]);
-    if (!exist) return res.status(404).json({ error: "Not found" });
-
-    await db.run(`UPDATE boxes SET ${built.sets} WHERE id=?`, [...built.values, id]);
-    const row = await db.get(
-      `SELECT id, serial, status, cycles, maintenance_count,
-              device_serial, pcc_id, checked_by, damaged_at, damage_reason
-         FROM boxes WHERE id=?`, [id]
-    );
-    res.json(row);
-  } catch (err) {
-    console.error('[ADMIN boxes update]', err);
-    res.status(500).json({ error: 'Update failed' });
-  }
-});
-
-/* DELETE /api/boxes/admin/:id */
-router.delete("/admin/:id", async (req,res) => {
-  try {
-    const { id } = req.params;
-    await db.run("DELETE FROM box_history WHERE box_id = ?", [id]);
-    const r = await db.run("DELETE FROM boxes WHERE id = ?", [id]);
-    if ((r && r.changes) === 0) return res.status(404).json({ error: "Not found" });
-    res.status(204).end();
-  } catch (err) {
-    console.error('[ADMIN boxes delete]', err);
-    res.status(500).json({ error: 'Delete failed' });
   }
 });
 
