@@ -85,8 +85,9 @@ export default function UserManagement() {
     }
   };
 
-  const remove = async (id) => {
-    if (!confirm("Diesen Benutzer wirklich löschen?")) return;
+  const remove = async (id, username) => {
+    if (username === "admin") return; // UI-Schutz; Backend schützt zusätzlich
+    if (!confirm(`Benutzer "${username}" wirklich löschen?`)) return;
     setBusy(true);
     setErr("");
     try {
@@ -104,50 +105,68 @@ export default function UserManagement() {
     [list]
   );
 
+  const inputCls =
+    "w-full rounded-md px-3 py-2 bg-slate-900 border border-slate-700 text-slate-100 " +
+    "placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40";
+
+  const btnNeutral =
+    "px-2 py-1 border rounded-md border-slate-600 text-slate-200 hover:bg-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed";
+
+  const btnDanger =
+    "px-2 py-1 border rounded-md border-red-400 text-red-200 hover:bg-red-900/30 transition disabled:opacity-50 disabled:cursor-not-allowed";
+
   return (
-    <div className="max-w-3xl mx-auto p-4">
-      <h1 className="text-xl font-semibold mb-4">User Management</h1>
+    <div className="max-w-5xl mx-auto p-6">
+      <h1 className="text-xl font-semibold mb-4 text-slate-100">User Management</h1>
 
-      {err && <div className="bg-red-100 border border-red-300 text-red-700 p-2 mb-3 rounded">{err}</div>}
+      {err && (
+        <div className="bg-red-900/40 border border-red-700 text-red-200 p-2 mb-4 rounded">
+          {err}
+        </div>
+      )}
 
-      <form onSubmit={create} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end mb-6">
+      {/* Neu anlegen */}
+      <form onSubmit={create} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-6">
         <div className="md:col-span-1">
-          <label className="block text-sm mb-1">Username*</label>
+          <label className="block text-sm mb-1 text-slate-300">Username*</label>
           <input
-            className="w-full border rounded px-2 py-1"
+            className={inputCls}
             value={form.username}
             onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
             required
             minLength={2}
+            placeholder="username"
           />
         </div>
 
         <div className="md:col-span-1">
-          <label className="block text-sm mb-1">E-Mail</label>
+          <label className="block text-sm mb-1 text-slate-300">E-Mail</label>
           <input
-            className="w-full border rounded px-2 py-1"
+            className={inputCls}
             type="email"
             value={form.email}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            placeholder="mail@example.com"
           />
         </div>
 
         <div className="md:col-span-1">
-          <label className="block text-sm mb-1">Passwort*</label>
+          <label className="block text-sm mb-1 text-slate-300">Passwort*</label>
           <input
-            className="w-full border rounded px-2 py-1"
+            className={inputCls}
             type="password"
             value={form.password}
             onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
             required
             minLength={4}
+            placeholder="••••••"
           />
         </div>
 
         <div className="md:col-span-1">
-          <label className="block text-sm mb-1">Rolle*</label>
+          <label className="block text-sm mb-1 text-slate-300">Rolle*</label>
           <select
-            className="w-full border rounded px-2 py-1"
+            className={inputCls}
             value={form.role}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
           >
@@ -160,64 +179,77 @@ export default function UserManagement() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full bg-blue-600 text-white rounded px-3 py-2 hover:bg-blue-700 disabled:opacity-50"
+            className="w-full bg-blue-600 text-white rounded-md px-3 py-2 hover:bg-blue-500 transition disabled:opacity-50"
           >
             Benutzer anlegen
           </button>
         </div>
       </form>
 
-      <table className="w-full border rounded overflow-hidden">
-        <thead>
-          <tr className="bg-gray-100 text-left">
-            <th className="p-2 border-b">ID</th>
-            <th className="p-2 border-b">Username</th>
-            <th className="p-2 border-b">E-Mail</th>
-            <th className="p-2 border-b">Rolle</th>
-            <th className="p-2 border-b">Aktionen</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((u) => (
-            <tr key={u.id} className="odd:bg-white even:bg-gray-50">
-              <td className="p-2 border-b">{u.id}</td>
-              <td className="p-2 border-b">{u.username}</td>
-              <td className="p-2 border-b">{u.email || "—"}</td>
-              <td className="p-2 border-b">{u.role}</td>
-              <td className="p-2 border-b space-x-2">
-                <button
-                  className="px-2 py-1 border rounded hover:bg-gray-100"
-                  onClick={() => updateRole(u.id, u.role === "admin" ? "user" : "admin")}
-                  disabled={busy}
-                >
-                  Rolle: {u.role === "admin" ? "→ user" : "→ admin"}
-                </button>
-                <button
-                  className="px-2 py-1 border rounded hover:bg-gray-100"
-                  onClick={() => resetPassword(u.id)}
-                  disabled={busy}
-                >
-                  Passwort setzen
-                </button>
-                <button
-                  className="px-2 py-1 border rounded hover:bg-red-50 text-red-700 border-red-300"
-                  onClick={() => remove(u.id)}
-                  disabled={busy}
-                >
-                  löschen
-                </button>
-              </td>
+      {/* Tabelle */}
+      <div className="rounded-xl border border-slate-700 overflow-hidden bg-slate-900/40">
+        <table className="w-full">
+          <thead className="bg-slate-800/60">
+            <tr className="text-left text-slate-300">
+              <th className="p-3 border-b border-slate-700">ID</th>
+              <th className="p-3 border-b border-slate-700">Username</th>
+              <th className="p-3 border-b border-slate-700">E-Mail</th>
+              <th className="p-3 border-b border-slate-700">Rolle</th>
+              <th className="p-3 border-b border-slate-700">Aktionen</th>
             </tr>
-          ))}
-          {sorted.length === 0 && (
-            <tr>
-              <td colSpan={5} className="p-4 text-center text-gray-500">
-                Keine Benutzer vorhanden.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sorted.map((u) => {
+              const isDefaultAdmin = u.username === "admin";
+              return (
+                <tr
+                  key={u.id}
+                  className="odd:bg-slate-900/30 even:bg-slate-900/10 hover:bg-slate-800/30 transition-colors"
+                >
+                  <td className="p-3 border-b border-slate-800 text-slate-300">{u.id}</td>
+                  <td className="p-3 border-b border-slate-800 text-slate-100">{u.username}</td>
+                  <td className="p-3 border-b border-slate-800 text-slate-300">
+                    {u.email || <span className="text-slate-500">—</span>}
+                  </td>
+                  <td className="p-3 border-b border-slate-800 text-slate-300">{u.role}</td>
+                  <td className="p-3 border-b border-slate-800 space-x-2">
+                    <button
+                      className={btnNeutral}
+                      onClick={() => updateRole(u.id, u.role === "admin" ? "user" : "admin")}
+                      disabled={busy || isDefaultAdmin} // Standard-Admin in der UI nicht umschalten
+                      title={isDefaultAdmin ? "Standard-Admin kann nicht umgestellt werden" : "Rolle umschalten"}
+                    >
+                      Rolle: {u.role === "admin" ? "→ user" : "→ admin"}
+                    </button>
+                    <button
+                      className={btnNeutral}
+                      onClick={() => resetPassword(u.id)}
+                      disabled={busy}
+                    >
+                      Passwort setzen
+                    </button>
+                    <button
+                      className={btnDanger}
+                      onClick={() => remove(u.id, u.username)}
+                      disabled={busy || isDefaultAdmin}
+                      title={isDefaultAdmin ? "Standard-Admin kann nicht gelöscht werden" : "Benutzer löschen"}
+                    >
+                      löschen
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {sorted.length === 0 && (
+              <tr>
+                <td colSpan={5} className="p-6 text-center text-slate-500">
+                  Keine Benutzer vorhanden.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
