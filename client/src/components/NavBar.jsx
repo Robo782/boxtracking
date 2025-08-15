@@ -6,48 +6,66 @@ import { getAuth } from "../utils/auth";
 export default function NavBar() {
   const nav = useNavigate();
   const loc = useLocation();
-  const [auth, setAuth] = useState(getAuth());
+  const [auth, setAuth] = useState(() => {
+    try { return getAuth(); } catch { return { token: null, role: null }; }
+  });
 
-  useEffect(() => { setAuth(getAuth()); }, [loc.pathname]);
   useEffect(() => {
-    const fn = () => setAuth(getAuth());
+    try { setAuth(getAuth()); } catch {}
+  }, [loc.pathname]);
+
+  useEffect(() => {
+    const fn = () => {
+      try { setAuth(getAuth()); } catch {}
+    };
     window.addEventListener("storage", fn);
     return () => window.removeEventListener("storage", fn);
   }, []);
 
-  const linkCls = (p) =>
-    `px-3 py-2 hover:bg-gray-100 rounded ${loc.pathname.startsWith(p) ? "font-semibold" : ""}`;
+  const linkCls = (p) => {
+    const active = loc.pathname.startsWith(p);
+    return [
+      "px-3 py-2 rounded transition-colors",
+      "text-gray-200 hover:text-white",
+      "hover:bg-white/10",
+      active ? "font-semibold bg-white/10" : "text-gray-300"
+    ].join(" ");
+  };
 
   const logout = () => {
-    localStorage.removeItem("token");
-    setAuth({ token: null, role: null, valid: false });
+    try { localStorage.removeItem("token"); } catch {}
+    try { sessionStorage.removeItem("token"); } catch {}
+    setAuth({ token: null, role: null });
     nav("/login");
   };
 
   return (
-    <nav className="flex items-center gap-2 px-4 py-2 border-b bg-white sticky top-0 z-10">
+    <nav className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 bg-[#0b1220] text-gray-200 sticky top-0 z-10">
       {auth?.token ? (
         <>
           {/* Für alle (user + admin) */}
           <Link to="/boxes" className={linkCls("/boxes")}>Boxen</Link>
 
-          {/* Admin-spezifische Menüpunkte (additiv) */}
+          {/* Admin-spezifisch (additiv) */}
           {auth.role === "admin" && (
             <>
               <Link to="/dashboard" className={linkCls("/dashboard")}>Dashboard</Link>
-              <Link to="/boxesmanage" className={linkCls("/boxesmanage")}>Box-Pflege</Link>
+              <Link to="/boxesmanage" className={linkCls("/boxesmanage")}>Box‑Pflege</Link>
               <Link to="/usermanagement" className={linkCls("/usermanagement")}>Users</Link>
               <Link to="/backuprestore" className={linkCls("/backuprestore")}>Backup</Link>
               <Link to="/admin/boxes" className={linkCls("/admin/boxes")}>DB‑Editor</Link>
             </>
           )}
 
-          <button onClick={logout} className="ml-auto px-2 underline hover:no-underline">
+          <button
+            onClick={logout}
+            className="ml-auto px-2 py-1 rounded text-gray-300 hover:text-white hover:bg-white/10"
+          >
             Logout
           </button>
         </>
       ) : (
-        <Link to="/login" className="ml-auto underline">Login</Link>
+        <Link to="/login" className="ml-auto underline hover:no-underline">Login</Link>
       )}
     </nav>
   );
