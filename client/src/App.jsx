@@ -14,6 +14,8 @@ const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
 const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 const BoxNext        = lazy(() => import("./pages/boxnext.jsx"));
 const BoxDbAdmin     = lazy(() => import("./pages/boxdbadmin.jsx"));
+// 🆕 neu:
+const BoxInspection  = lazy(() => import("./pages/boxinspection.jsx"));
 
 function RequireAuth() {
   const { token } = getAuth();
@@ -39,7 +41,7 @@ function Layout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<div className="p-4">Laden…</div>}>
+      <Suspense fallback={<div className="p-4 text-slate-300">Laden…</div>}>
         <Routes>
           <Route path="/login" element={<Login />} />
 
@@ -51,8 +53,10 @@ export default function App() {
               <Route path="/boxes/:id" element={<BoxDetail />} />
               <Route path="/boxes/:id/history" element={<BoxHistory />} />
               <Route path="/boxnext" element={<BoxNext />} />
+              {/* 🆕 neu: Prüfprotokollseite */}
+              <Route path="/boxes/:id/inspection" element={<BoxInspection />} />
 
-              {/* Admin-only (additiv) */}
+              {/* Nur Admin */}
               <Route element={<RequireAdmin />}>
                 <Route path="/dashboard" element={<AdminDashboard />} />
                 <Route path="/boxesmanage" element={<BoxesManage />} />
