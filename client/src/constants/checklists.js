@@ -1,6 +1,6 @@
 // client/src/constants/checklists.js
-// Final geprüfte Checklisten (aus deinen Fotos).
-// Rein statische Daten + kleine Helper. Keine Seiteneffekte.
+// Endgültige Prüfpunkte für cobas pure (PU-…) und cobas pro (PR-…).
+// Rein statische Daten + Helper, keine Seiteneffekte.
 
 export const CHECKLISTS = {
   pure: {
@@ -50,7 +50,7 @@ export const CHECKLISTS = {
   },
 };
 
-// Auswahl-Helfer: PR… → pro, PU… → pure; Default = pure
+// PR… → pro, PU… → pure; Default = pure
 export function getChecklistsForSerial(serial) {
   const s = String(serial || "");
   if (/^PR/i.test(s)) return CHECKLISTS.pro;
