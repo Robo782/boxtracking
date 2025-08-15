@@ -1,20 +1,27 @@
 // server/middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
-const db = require("../db"); // für Fallback-Role-Lookup
-
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
+const { JWT_SECRET } = require("../config/jwt");
+const db = require("../db");
 
 /**
- * attachUser:
- * - Liest JWT aus Authorization: Bearer <token>
- * - Setzt req.user = { id, username, role, isAdmin } oder null.
- * - Wenn role nicht im Token ist, wird sie aus der DB nachgeladen.
- * - Hat KEIN Hard-Fail: Ohne/ungültiges Token bleibt req.user = null.
+ * Liest Token aus:
+ * - Authorization: Bearer <token>
+ * - X-Auth-Token (Fallback)
+ * - Cookie "token" (falls gesetzt)
+ * und setzt req.user = { id, username, role, isAdmin }.
+ * Kein Hard-Fail: bei Fehler bleibt req.user = null.
  */
 function attachUser(req, _res, next) {
-  const hdr = req.headers?.authorization || "";
-  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+  const hdr = req.headers?.authorization || req.headers?.Authorization || "";
+  const bearer = hdr.toLowerCase().startsWith("bearer ") ? hdr.slice(7) : null;
+  const headerToken = req.headers["x-auth-token"] || req.headers["X-Auth-Token"];
+  const cookieToken = (() => {
+    const c = req.headers.cookie || "";
+    const m = c.match(/(?:^|;\s*)token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  })();
 
+  const token = bearer || headerToken || cookieToken;
   if (!token) {
     req.user = null;
     return next();
@@ -24,16 +31,15 @@ function attachUser(req, _res, next) {
     const payload = jwt.verify(token, JWT_SECRET);
     let { id, username, role, isAdmin } = payload || {};
 
-    // Fallback: falls role fehlt, aus DB nachladen
-    try {
-      if (!role && id) {
-        const row = db.raw.prepare(`SELECT role FROM users WHERE id = ?`).get(id);
+    // Fallback: Rolle aus DB nachladen, falls nicht im Token
+    if (!role && (id || username)) {
+      try {
+        const row = id
+          ? db.raw.prepare(`SELECT role FROM users WHERE id = ?`).get(id)
+          : db.raw.prepare(`SELECT role FROM users WHERE username = ?`).get(username);
         role = row?.role || null;
-      } else if (!role && username) {
-        const row = db.raw.prepare(`SELECT role FROM users WHERE username = ?`).get(username);
-        role = row?.role || null;
-      }
-    } catch (_) {}
+      } catch {}
+    }
 
     req.user = {
       id: id ?? null,
@@ -41,22 +47,20 @@ function attachUser(req, _res, next) {
       role: role ?? null,
       isAdmin: isAdmin === true || role === "admin",
     };
-  } catch (_e) {
-    req.user = null; // abgelaufen/ungültig → einfach als nicht eingeloggt behandeln
+  } catch {
+    req.user = null;
   }
   next();
 }
 
-/** requireAuth – nur eingeloggte Nutzer */
 function requireAuth(req, res, next) {
   if (!req.user) return res.status(401).json({ error: "Nicht eingeloggt." });
   next();
 }
 
-/** requireAdmin – akzeptiert role==="admin" oder isAdmin===true */
 function requireAdmin(req, res, next) {
-  const isAdmin = req.user?.isAdmin || req.user?.role === "admin";
-  if (!isAdmin) return res.status(403).json({ error: "Admin-Rechte nötig." });
+  const ok = req.user?.isAdmin || req.user?.role === "admin";
+  if (!ok) return res.status(403).json({ error: "Admin-Rechte nötig." });
   next();
 }
 

@@ -1,63 +1,67 @@
-import { useState }  from "react";
+// client/src/pages/login.jsx
+import { useState } from "react";
+import api from "@/utils/api";
+import { storeAuth } from "@/utils/auth";
 import { useNavigate } from "react-router-dom";
-import api            from "@/utils/api";
 
 export default function Login() {
   const nav = useNavigate();
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const [identifier, setIdentifier] = useState("");   // Name ODER Mail
-  const [password,   setPassword]   = useState("");
-  const [error,      setError]      = useState("");
-
-  const submit = e => {
+  const submit = async (e) => {
     e.preventDefault();
-    setError("");
-
-    api.post("/auth/login", { identifier: identifier.trim(), password })
-       .then(({ token }) => {
-         if (!token) throw new Error("kein Token");
-         localStorage.setItem("token", token);
-         window.dispatchEvent(new Event("authchange"));
-         nav("/boxes", { replace: true });
-       })
-       .catch(() => setError("Login fehlgeschlagen"));
+    setBusy(true);
+    setErr("");
+    try {
+      const res = await api.post("/auth/login", {
+        username: form.username.trim(),
+        password: form.password,
+      });
+      if (!res?.token) throw new Error("Kein Token erhalten");
+      const s = storeAuth(res.token);
+      // Admin darf überall hin, User zu Boxen
+      nav(s.role === "admin" ? "/dashboard" : "/boxes", { replace: true });
+    } catch (e) {
+      setErr(e.message || "Login fehlgeschlagen");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <main className="flex flex-col items-center justify-center h-screen">
-      <h1 className="text-2xl font-semibold mb-6">Device Box Tracker</h1>
-
-      {error && (
-        <p className="mb-3 text-red-500 border border-red-500 px-3 py-1 rounded">
-          {error}
-        </p>
-      )}
-
-      <form onSubmit={submit}
-            className="w-80 flex flex-col gap-3 border p-6 rounded-lg bg-black/10">
-
-        <input
-          className="input input-bordered"
-          type="text"
-          placeholder="Benutzername oder E-Mail"
-          value={identifier}
-          onChange={e => setIdentifier(e.target.value)}
-          required
-        />
-
-        <input
-          className="input input-bordered"
-          type="password"
-          placeholder="Passwort"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          required
-        />
-
-        <button className="btn btn-primary mt-2" type="submit">
-          Login
+    <div className="max-w-sm mx-auto p-6">
+      <h1 className="text-xl mb-4">Login</h1>
+      {err && <div className="mb-3 p-2 rounded border border-red-700 bg-red-900/40 text-red-200">{err}</div>}
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="block text-sm mb-1">Username</label>
+          <input
+            className="w-full border rounded px-2 py-1 bg-transparent"
+            value={form.username}
+            onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Passwort</label>
+          <input
+            type="password"
+            className="w-full border rounded px-2 py-1 bg-transparent"
+            value={form.password}
+            onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+            required
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-2 disabled:opacity-50"
+        >
+          Einloggen
         </button>
       </form>
-    </main>
+    </div>
   );
 }
