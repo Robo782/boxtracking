@@ -1,42 +1,18 @@
-/**
- * Admin-Router – alle Endpunkte, die nur Admin-User aufrufen dürfen
- */
-const express = require('express');
-const adminController = require('../controllers/adminController');
-const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
+// server/routes/adminRoutes.js
+const express = require("express");
+const { requireAuth, requireAdmin } = require("../middleware/authMiddleware");
+const admin = require("../controllers/adminController");
 
 const router = express.Router();
 
-/* Statistik zum aktuellen Datenbestand */
-router.get(
-  '/stats',
-  requireAuth,
-  requireAdmin,
-  adminController.getStats
-);
+/* Stats */
+router.get("/stats", requireAuth, requireAdmin, admin.getStats);
 
-/* Alles löschen (Boxen + History) */
-router.post(
-  '/reset',
-  requireAuth,
-  requireAdmin,
-  adminController.resetData
-);
-
-/* Datenbank-Dump herunterladen (ZIP) */
-router.post(
-  '/backup',
-  requireAuth,
-  requireAdmin,
-  adminController.createBackup
-);
-
-/* Dump hochladen & wiederherstellen */
-router.post(
-  '/restore',
-  requireAuth,
-  requireAdmin,
-  adminController.restoreBackup
-);
+/* Users CRUD */
+router.get("/users", requireAuth, requireAdmin, admin.listUsers);
+router.post("/users", requireAuth, requireAdmin, admin.createUser);
+router.patch("/users/:id", requireAuth, requireAdmin, admin.updateUser);
+router.patch("/users/:id/password", requireAuth, requireAdmin, admin.resetPassword);
+router.delete("/users/:id", requireAuth, requireAdmin, admin.deleteUser);
 
 module.exports = router;

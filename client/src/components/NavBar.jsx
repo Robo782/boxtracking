@@ -1,6 +1,7 @@
+// client/src/components/NavBar.jsx
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getAuth } from "../utils/auth.js";
+import { getAuth } from "../utils/auth";
 
 export default function NavBar() {
   const nav = useNavigate();
@@ -14,35 +15,40 @@ export default function NavBar() {
     return () => window.removeEventListener("storage", fn);
   }, []);
 
+  const linkCls = (p) =>
+    `px-3 py-2 hover:bg-gray-100 rounded ${loc.pathname.startsWith(p) ? "font-semibold" : ""}`;
+
   const logout = () => {
     localStorage.removeItem("token");
-    setAuth(getAuth());
-    nav("/login", { replace: true });
+    setAuth({ token: null, role: null, valid: false });
+    nav("/login");
   };
 
-  const linkCls = (path) =>
-    `px-2 py-1 rounded hover:bg-base-200 ${loc.pathname.startsWith(path) ? "font-semibold" : ""}`;
-
   return (
-    <nav className="navbar bg-base-100 border-b border-base-300 gap-3 px-4">
-      <Link to="/boxes" className="text-lg font-semibold">Device Box Tracker</Link>
-
-      <Link to="/boxes" className={linkCls("/boxes")}>Boxen</Link>
-
-      {/* Admin-Links nur wenn Role=admin */}
-      {auth?.role === "admin" && (
+    <nav className="flex items-center gap-2 px-4 py-2 border-b bg-white sticky top-0 z-10">
+      {auth?.token ? (
         <>
-          <Link to="/dashboard"      className={linkCls("/dashboard")}>Dashboard</Link>
-          <Link to="/boxesmanage"    className={linkCls("/boxesmanage")}>Box-Pflege</Link>
-          <Link to="/usermanagement" className={linkCls("/usermanagement")}>Users</Link>
-          <Link to="/backuprestore"  className={linkCls("/backuprestore")}>Backup</Link>
-          <Link to="/admin/boxes"    className={linkCls("/admin/boxes")}>DB‑Editor</Link> {/* ⬅️ NEU */}
-        </>
-      )}
+          {/* Für alle (user + admin) */}
+          <Link to="/boxes" className={linkCls("/boxes")}>Boxen</Link>
 
-      <button onClick={logout} className="ml-auto px-2 underline hover:no-underline">
-        Logout
-      </button>
+          {/* Admin-spezifische Menüpunkte (additiv) */}
+          {auth.role === "admin" && (
+            <>
+              <Link to="/dashboard" className={linkCls("/dashboard")}>Dashboard</Link>
+              <Link to="/boxesmanage" className={linkCls("/boxesmanage")}>Box-Pflege</Link>
+              <Link to="/usermanagement" className={linkCls("/usermanagement")}>Users</Link>
+              <Link to="/backuprestore" className={linkCls("/backuprestore")}>Backup</Link>
+              <Link to="/admin/boxes" className={linkCls("/admin/boxes")}>DB‑Editor</Link>
+            </>
+          )}
+
+          <button onClick={logout} className="ml-auto px-2 underline hover:no-underline">
+            Logout
+          </button>
+        </>
+      ) : (
+        <Link to="/login" className="ml-auto underline">Login</Link>
+      )}
     </nav>
   );
 }

@@ -1,3 +1,4 @@
+// server/server.js
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -8,14 +9,19 @@ const os = require("os");
 const db = require("./db"); // enthält ensureAdmin()
 const { DB_PATH, DB_DIR } = db;
 
+// 🔐 NEU: Auth-Middleware (beeinträchtigt bestehende Routen nicht)
+const { attachUser } = require("./middleware/authMiddleware");
+
 const app = express();
 const PORT = process.env.PORT || 10_000;
 
 /* ─────────────── Global Middleware ──────────────────────────────────── */
 app.use(cors());
 app.use(express.json());
+// 🔐 NEU: JWT auslesen (kein Hard-Fail, nur req.user setzen)
+app.use(attachUser);
 
-/* ─────────────── ADMIN – Backup & Restore ──────────────────────────── */
+/* ─────────────── ADMIN – Backup & Restore (DEIN CODE, unverändert) ─── */
 app.get("/admin/backup", (_req, res) => {
   try {
     db.raw.pragma("wal_checkpoint(TRUNCATE)");
@@ -42,7 +48,7 @@ app.post("/admin/restore", upload.single("file"), (req, res) => {
   });
 });
 
-/* ─────────────── BATCH-INSERT Boxen ─────────────────────────────────── */
+/* ─────────────── BATCH-INSERT Boxen (DEIN CODE, unverändert) ────────── */
 app.post("/api/boxes/batch", (req, res) => {
   const { type, count } = req.body;
   const valid = ["PU-M", "PU-S", "PR-SB", "PR-23"];
@@ -73,10 +79,13 @@ app.post("/api/boxes/batch", (req, res) => {
   }
 });
 
-/* ─────────────── API-Routen ─────────────────────────────────────────── */
+/* ─────────────── API-Routen (DEINE Mounts bleiben) ──────────────────── */
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/boxes", require("./routes/boxRoutes"));
-app.use("/api/backup", require("./routes/backupRoutes")); // ✅ NEU
+app.use("/api/backup", require("./routes/backupRoutes")); // ✅ dein bestehender Mount
+
+// 🔐 NEU: Admin-API (Users + Stats). KEIN Backup/Restore hier, um Duplikate zu vermeiden.
+app.use("/api/admin", require("./routes/adminRoutes"));
 
 /* ─────────────── React-Frontend ─────────────────────────────────────── */
 const staticDir = path.join(__dirname, "static");

@@ -1,7 +1,7 @@
 // client/src/App.jsx
-import React, { Suspense, lazy, useEffect, useState } from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { getAuth } from "./utils/auth.js";
+import { getAuth } from "./utils/auth";
 
 const NavBar         = lazy(() => import("./components/NavBar.jsx"));
 const Boxes          = lazy(() => import("./pages/boxes.jsx"));
@@ -13,67 +13,59 @@ const AdminDashboard = lazy(() => import("./pages/admindashboard.jsx"));
 const UserMgmt       = lazy(() => import("./pages/usermanagement.jsx"));
 const BackupRestore  = lazy(() => import("./pages/backuprestore.jsx"));
 const BoxNext        = lazy(() => import("./pages/boxnext.jsx"));
-const BoxDbAdmin     = lazy(() => import("./pages/boxdbadmin.jsx")); // NEU
+const BoxDbAdmin     = lazy(() => import("./pages/boxdbadmin.jsx"));
 
-export default function App() {
-  const [authed, setAuthed] = useState(Boolean(getAuth().valid));
+function RequireAuth() {
+  const { token } = getAuth();
+  return token ? <Outlet /> : <Navigate to="/login" replace />;
+}
 
-  useEffect(() => {
-    const onStorage = () => setAuthed(Boolean(getAuth().valid));
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  return (
-    <BrowserRouter>
-      <Suspense fallback={<div className="p-6">lädt …</div>}>
-        <Routes>
-          {/* Public */}
-          {!authed && (
-            <>
-              <Route path="/login" element={<Login />} />
-              <Route path="*" element={<Navigate to="/login" replace />} />
-            </>
-          )}
-
-          {/* Protected */}
-          {authed && (
-            <>
-              <Route element={<Layout />}>
-                <Route index element={<Navigate to="/boxes" replace />} />
-                <Route path="/boxes" element={<Boxes />} />
-                <Route path="/boxes/:id" element={<BoxDetail />} />
-                <Route path="/boxes/:id/history" element={<BoxHistory />} />
-                <Route path="/boxnext/:id" element={<BoxNext />} />
-
-                {/* Admin-Bereich (bestehende Seiten) */}
-                <Route path="/dashboard" element={<AdminDashboard />} />
-                <Route path="/boxesmanage" element={<BoxesManage />} />
-                <Route path="/usermanagement" element={<UserMgmt />} />
-                <Route path="/backuprestore" element={<BackupRestore />} />
-
-                {/* NEU: direkter DB-Editor */}
-                <Route path="/admin/boxes" element={<BoxDbAdmin />} />
-              </Route>
-
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/boxes" replace />} />
-            </>
-          )}
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
-  );
+function RequireAdmin() {
+  const { token, role } = getAuth();
+  return token && role === "admin" ? <Outlet /> : <Navigate to="/boxes" replace />;
 }
 
 function Layout() {
   return (
     <>
       <NavBar />
-      {/* WICHTIG: ohne Outlet werden Kinder nicht gerendert */}
       <main className="mt-4">
         <Outlet />
       </main>
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Suspense fallback={<div className="p-4">Laden…</div>}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+
+          <Route element={<RequireAuth />}>
+            <Route element={<Layout />}>
+              {/* Für alle (user + admin) */}
+              <Route path="/" element={<Navigate to="/boxes" replace />} />
+              <Route path="/boxes" element={<Boxes />} />
+              <Route path="/boxes/:id" element={<BoxDetail />} />
+              <Route path="/boxes/:id/history" element={<BoxHistory />} />
+              <Route path="/boxnext" element={<BoxNext />} />
+
+              {/* Admin-only (additiv) */}
+              <Route element={<RequireAdmin />}>
+                <Route path="/dashboard" element={<AdminDashboard />} />
+                <Route path="/boxesmanage" element={<BoxesManage />} />
+                <Route path="/usermanagement" element={<UserMgmt />} />
+                <Route path="/backuprestore" element={<BackupRestore />} />
+                <Route path="/admin/boxes" element={<BoxDbAdmin />} />
+              </Route>
+            </Route>
+          </Route>
+
+          <Route path="*" element={<Navigate to="/boxes" replace />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
   );
 }

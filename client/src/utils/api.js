@@ -1,28 +1,31 @@
-// universeller Fetch-Wrapper   (GET / POST / PATCH / DELETE)
-const BASE = "/api";               // bei Bedarf anpassen
+// client/src/utils/api.js
+import { getAuth } from "./auth";
+const BASE = "/api";
 
-async function request(method, url, body) {
-  const opts = {
-    method,
-    headers: { "Content-Type": "application/json" }
-  };
-  if (body !== undefined) opts.body = JSON.stringify(body);
+async function request(method, url, body, opts = {}) {
+  const { token } = getAuth();
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(BASE + url, opts);
+  const fetchOpts = { method, headers, signal: opts.signal };
+  if (body !== undefined) fetchOpts.body = JSON.stringify(body);
+
+  const res = await fetch(BASE + url, fetchOpts);
 
   if (!res.ok) {
-    // Fehlertext (z.B. { message:"…" }) an den Aufrufer durchreichen
     let msg = "Unbekannter Fehler";
-    try { msg = (await res.json()).message; } catch {}
+    try {
+      const j = await res.json();
+      msg = j.message || j.error || msg;
+    } catch {}
     throw new Error(msg);
   }
-  // 204 No Content → nichts zurückgeben
   return res.status === 204 ? null : res.json();
 }
 
 export default {
-  get   : (url)        => request("GET",    url),
-  post  : (url, body)  => request("POST",   url, body),
-  patch : (url, body)  => request("PATCH",  url, body),   //  ← NEU
-  del   : (url)        => request("DELETE", url)
+  get: (url, opts) => request("GET", url, undefined, opts),
+  post: (url, body, opts) => request("POST", url, body, opts),
+  patch: (url, body, opts) => request("PATCH", url, body, opts),
+  del: (url, opts) => request("DELETE", url, undefined, opts),
 };
